@@ -61,6 +61,21 @@
     .btn-secondary{background:#475569}
     input,select{width:100%;padding:10px 11px;margin:6px 0 12px;border:1px solid #ccd6e2;border-radius:8px}
     form.inline{display:inline}
+    nav[role="navigation"]{margin-top:14px}
+    nav[role="navigation"] > div:first-child{display:none}
+    nav[role="navigation"] > div:last-child{display:flex;justify-content:center}
+    nav[role="navigation"] .relative.z-0{display:flex;gap:6px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);padding:8px;border-radius:12px;box-shadow:var(--shadow)}
+    nav[role="navigation"] span[aria-current="page"] span,
+    nav[role="navigation"] a,
+    nav[role="navigation"] span[aria-disabled="true"] span{
+      min-width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;
+      border-radius:9px;border:1px solid #d7e0eb;font-size:13px;line-height:1;padding:0 10px;text-decoration:none
+    }
+    nav[role="navigation"] a{color:#334155;background:#fff}
+    nav[role="navigation"] a:hover{background:#eff6ff;border-color:#93c5fd;color:#1d4ed8}
+    nav[role="navigation"] span[aria-current="page"] span{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+    nav[role="navigation"] span[aria-disabled="true"] span{background:#f8fafc;color:#94a3b8}
+    nav[role="navigation"] svg{width:14px;height:14px}
     .login-shell{min-height:100vh;background:#464a74;display:grid;place-items:center;padding:20px}
     .login-card{width:min(100%,1000px);min-height:640px;background:#4b4f75;border-radius:34px;box-shadow:0 30px 40px rgba(12,14,35,.45);position:relative;overflow:hidden;padding:64px 52px;color:#eef1ff}
     .blob-a,.blob-b{position:absolute;border-radius:46% 54% 62% 38% / 52% 41% 59% 48%}
