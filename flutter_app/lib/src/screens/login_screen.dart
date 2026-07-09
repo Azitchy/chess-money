@@ -1,6 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
+import '../app_colors.dart';
+import '../login_decorations.dart';
+import '../login_text_field.dart';
 import '../services/api_client.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -44,16 +47,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const blue = Color(0xFF49A6F4);
-    const lavender = Color(0xFF7B74F7);
-    const deepPurple = Color(0xFF4D3FD9);
-    const pageBg = Color(0xFFF4F9FF);
-
     return Scaffold(
-      backgroundColor: pageBg,
+      backgroundColor: AppColors.pageBackground,
       body: Stack(
         children: [
-          const _LoginBackdrop(),
+          const LoginBackdrop(),
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -67,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const SizedBox(height: 8),
-                      const _AvatarBadge(),
+                      const AvatarBadge(),
                       const SizedBox(height: 18),
                       Text(
                         _registerMode ? 'Create account' : 'Welcome back',
@@ -75,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: Theme.of(context).textTheme.headlineMedium
                             ?.copyWith(
                               fontWeight: FontWeight.w800,
-                              color: const Color(0xFF2456A6),
+                              color: AppColors.heading,
                             ),
                       ),
                       const SizedBox(height: 6),
@@ -85,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             : 'Sign in to continue to your wallet and matches',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF6D87B7),
+                          color: AppColors.mutedText,
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -110,21 +108,21 @@ class _LoginScreenState extends State<LoginScreen> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               if (_registerMode) ...[
-                                _PillTextField(
+                                PillTextField(
                                   controller: _name,
                                   label: 'Full name',
                                   icon: Icons.badge_outlined,
                                   validator: _required,
                                 ),
                                 const SizedBox(height: 12),
-                                _PillTextField(
+                                PillTextField(
                                   controller: _username,
                                   label: 'Username',
                                   icon: Icons.person_outline,
                                   validator: _required,
                                 ),
                                 const SizedBox(height: 12),
-                                _PillTextField(
+                                PillTextField(
                                   controller: _email,
                                   label: 'Email',
                                   icon: Icons.email_outlined,
@@ -133,7 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 const SizedBox(height: 12),
                               ] else ...[
-                                _PillTextField(
+                                PillTextField(
                                   controller: _login,
                                   label: 'Username or email',
                                   icon: Icons.person_outline,
@@ -141,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 const SizedBox(height: 12),
                               ],
-                              _PillTextField(
+                              PillTextField(
                                 controller: _password,
                                 label: 'Password',
                                 icon: Icons.lock_outline,
@@ -168,14 +166,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                             4,
                                           ),
                                         ),
-                                        activeColor: blue,
+                                        activeColor: AppColors.blue,
                                         visualDensity: VisualDensity.compact,
                                       ),
                                     ),
                                     const Text(
                                       'Remember me',
                                       style: TextStyle(
-                                        color: Color(0xFF6D87B7),
+                                        color: AppColors.mutedText,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -185,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           ? null
                                           : _forgotPassword,
                                       style: TextButton.styleFrom(
-                                        foregroundColor: blue,
+                                        foregroundColor: AppColors.blue,
                                         padding: EdgeInsets.zero,
                                       ),
                                       child: const Text(
@@ -226,7 +224,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: DecoratedBox(
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
-                                      colors: [blue, lavender],
+                                      colors: [
+                                        AppColors.blue,
+                                        AppColors.lavender,
+                                      ],
                                     ),
                                     borderRadius: BorderRadius.circular(26),
                                     boxShadow: const [
@@ -270,7 +271,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         _error = null;
                                       }),
                                 style: TextButton.styleFrom(
-                                  foregroundColor: deepPurple,
+                                  foregroundColor: AppColors.deepPurple,
                                 ),
                                 child: Text(
                                   _registerMode
@@ -340,9 +341,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
       widget.onLogin();
     } catch (e) {
-      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      setState(() => _error = _friendlyError(e));
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -354,134 +357,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String? _required(String? value) =>
       (value == null || value.trim().isEmpty) ? 'Required' : null;
-}
 
-class _LoginBackdrop extends StatelessWidget {
-  const _LoginBackdrop();
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFFEAF5FF), Color(0xFFF8FBFF)],
-            ),
-          ),
-        ),
-        Positioned(
-          top: -68,
-          left: -56,
-          child: _CircleBlob(size: 220, color: Color(0xFF61B6FF)),
-        ),
-        Positioned(
-          top: -88,
-          right: -84,
-          child: _CircleBlob(size: 270, color: Color(0xFF7B74F7)),
-        ),
-        Positioned(
-          left: -28,
-          right: -28,
-          bottom: -26,
-          child: Container(
-            height: 92,
-            decoration: BoxDecoration(
-              color: const Color(0xFF49A6F4),
-              borderRadius: BorderRadius.circular(34),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CircleBlob extends StatelessWidget {
-  const _CircleBlob({required this.size, required this.color});
-
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-}
-
-class _AvatarBadge extends StatelessWidget {
-  const _AvatarBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 120,
-      height: 120,
-      decoration: const BoxDecoration(
-        color: Color(0xFF44A7F5),
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(Icons.person, size: 68, color: Colors.white),
-    );
-  }
-}
-
-class _PillTextField extends StatelessWidget {
-  const _PillTextField({
-    required this.controller,
-    required this.label,
-    required this.icon,
-    required this.validator,
-    this.keyboardType,
-    this.obscureText = false,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final IconData icon;
-  final String? Function(String?) validator;
-  final TextInputType? keyboardType;
-  final bool obscureText;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      validator: validator,
-      keyboardType: keyboardType,
-      obscureText: obscureText,
-      style: const TextStyle(
-        color: Color(0xFF264D7E),
-        fontWeight: FontWeight.w600,
-      ),
-      decoration: InputDecoration(
-        hintText: label,
-        prefixIcon: Icon(icon, color: const Color(0xFF5D8FDE)),
-        filled: true,
-        fillColor: const Color(0xFFF4F8FF),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 16,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(999),
-          borderSide: const BorderSide(color: Color(0xFFD9E6FF)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(999),
-          borderSide: const BorderSide(color: Color(0xFFD9E6FF)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(999),
-          borderSide: const BorderSide(color: Color(0xFF49A6F4), width: 1.6),
-        ),
-      ),
-    );
+  String _friendlyError(Object error) {
+    return error.toString().replaceFirst('Exception: ', '');
   }
 }
