@@ -1,13 +1,37 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  ApiClient({String? baseUrl})
-    : _baseUrl = baseUrl ?? 'http://10.0.2.2:8000/api';
+  ApiClient._(this._baseUrl, this._prefs);
+
+  static const _tokenKey = 'auth_token';
 
   final String _baseUrl;
+  final SharedPreferences _prefs;
   String? _token;
+
+  static Future<ApiClient> create({String? baseUrl}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final client = ApiClient._(baseUrl ?? _defaultBaseUrl(), prefs);
+    client._token = prefs.getString(_tokenKey);
+    return client;
+  }
+
+  static String _defaultBaseUrl() {
+    const overrideBaseUrl = String.fromEnvironment('API_BASE_URL');
+    if (overrideBaseUrl.isNotEmpty) {
+      return overrideBaseUrl;
+    }
+
+    if (kIsWeb) {
+      return 'http://127.0.0.1:8000/api';
+    }
+
+    return 'http://10.0.2.2:8000/api';
+  }
 
   bool get isLoggedIn => _token != null;
 
@@ -24,37 +48,54 @@ class ApiClient {
     required String username,
     required String email,
     required String password,
+    bool persistSession = true,
   }) async {
-    final response = await http.post(
-      Uri.parse('$_baseUrl/register'),
-      headers: _headers,
-      body: jsonEncode({
-        'name': name,
-        'username': username,
-        'email': email,
-        'password': password,
-      }),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/register'),
+        headers: _headers,
+        body: jsonEncode({
+          'name': name,
+          'username': username,
+          'email': email,
+          'password': password,
+        }),
+      );
 
-    return _handleAuthResponse(response);
+      return await _handleAuthResponse(
+        response,
+        persistSession: persistSession,
+      );
+    } catch (error) {
+      throw Exception(_friendlyNetworkMessage(error));
+    }
   }
 
   Future<Map<String, dynamic>> login({
     required String login,
     required String password,
+    bool persistSession = true,
   }) async {
-    final response = await http.post(
-      Uri.parse('$_baseUrl/login'),
-      headers: _headers,
-      body: jsonEncode({'login': login, 'password': password}),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/login'),
+        headers: _headers,
+        body: jsonEncode({'login': login, 'password': password}),
+      );
 
-    return _handleAuthResponse(response);
+      return await _handleAuthResponse(
+        response,
+        persistSession: persistSession,
+      );
+    } catch (error) {
+      throw Exception(_friendlyNetworkMessage(error));
+    }
   }
 
   Future<void> logout() async {
     await http.post(Uri.parse('$_baseUrl/logout'), headers: _headers);
     _token = null;
+    await _prefs.remove(_tokenKey);
   }
 
   Future<double> getWalletBalance() async {
@@ -120,21 +161,50 @@ class ApiClient {
     _decode(response);
   }
 
-  Map<String, dynamic> _handleAuthResponse(http.Response response) {
+  Future<Map<String, dynamic>> _handleAuthResponse(
+    http.Response response, {
+    required bool persistSession,
+  }) async {
     final data = _decode(response);
     _token = data['token'] as String;
+    if (persistSession) {
+      await _prefs.setString(_tokenKey, _token!);
+    } else {
+      await _prefs.remove(_tokenKey);
+    }
     return data;
   }
 
   Map<String, dynamic> _decode(http.Response response) {
-    final payload = response.body.isEmpty
-        ? <String, dynamic>{}
-        : jsonDecode(response.body) as Map<String, dynamic>;
+    Map<String, dynamic> payload;
+    try {
+      payload = response.body.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      payload = <String, dynamic>{
+        'message': response.body.isEmpty
+            ? 'Request failed (${response.statusCode})'
+            : response.body,
+      };
+    }
+
     if (response.statusCode >= 400) {
       throw Exception(
         payload['message'] ?? 'Request failed (${response.statusCode})',
       );
     }
     return payload;
+  }
+
+  String _friendlyNetworkMessage(Object error) {
+    final message = error.toString();
+    if (message.contains('SocketException') ||
+        message.contains('Connection refused') ||
+        message.contains('Connection timed out')) {
+      return 'Cannot reach the API at $_baseUrl. Make sure the backend server is running and the device can access that address.';
+    }
+
+    return message;
   }
 }

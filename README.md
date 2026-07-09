@@ -21,6 +21,8 @@ This repo now contains:
 
 Backend:
 
+Prerequisite: PHP 8.2 or newer.
+
 1. `cd backend`
 2. `php artisan migrate:fresh --seed --force`
 3. `php artisan serve`
@@ -76,6 +78,7 @@ Use `Authorization: Bearer <token>` for protected routes.
 
 ## Notes
 
+- The backend currently targets Laravel 12, which requires PHP 8.2+.
 - Wallet updates and match settlements run inside DB transactions.
 - Competitive matches lock both players' stake when opponent joins.
 - Draw/cancel returns both stakes.
