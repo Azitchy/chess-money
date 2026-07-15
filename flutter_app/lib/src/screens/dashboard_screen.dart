@@ -331,22 +331,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ]);
   }
 
-  void _openChessActivity({
+  Future<void> _openChessActivity({
     required String title,
     required String subtitle,
     required ChessActivity activity,
     required int boardVariant,
-  }) {
-    Navigator.of(context).push(
+  }) async {
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ChessActivityScreen(
           title: title,
           subtitle: subtitle,
           activity: activity,
           initialBoardVariant: boardVariant,
+          apiClient: widget.demoMode ? null : widget.apiClient,
+          initialRating: _rating,
+          initialLevel: _level,
         ),
       ),
     );
+    if (mounted && !widget.demoMode) await _load();
   }
 
   Widget _buildPlayersPage() {
@@ -991,6 +995,9 @@ class ChessActivityScreen extends StatefulWidget {
     required this.initialBoardVariant,
     this.initialFen,
     this.randomizePuzzles = true,
+    this.apiClient,
+    this.initialRating = 0,
+    this.initialLevel = 0,
   });
 
   final String title;
@@ -999,6 +1006,9 @@ class ChessActivityScreen extends StatefulWidget {
   final int initialBoardVariant;
   final String? initialFen;
   final bool randomizePuzzles;
+  final ApiClient? apiClient;
+  final int initialRating;
+  final int initialLevel;
 
   @override
   State<ChessActivityScreen> createState() => _ChessActivityScreenState();
@@ -1018,7 +1028,12 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
   bool _puzzleSolved = false;
   bool _botThinking = false;
   bool _puzzleReplying = false;
+  bool _puzzleAwarding = false;
+  bool _botWinReported = false;
   int _solutionStep = 0;
+  late int _rating;
+  late int _playerLevel;
+  late String _botGameId;
   Timer? _homeRedirectTimer;
   Timer? _puzzleReplyTimer;
   final ChessBotEngine _botEngine = ChessBotEngine();
@@ -1032,6 +1047,8 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
   void initState() {
     super.initState();
     _dailyDate = DateTime.now();
+    _rating = widget.initialRating;
+    _playerLevel = widget.initialLevel;
     _puzzleIndex = widget.initialBoardVariant % chessPuzzles.length;
     if (widget.activity == ChessActivity.dailyPuzzle) {
       _generatedPuzzle = dailyChessPuzzle(_dailyDate);
@@ -1136,6 +1153,21 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
                 ),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'Level $_playerLevel',
+                  key: const Key('bot-player-level'),
+                  style: const TextStyle(
+                    color: AppColors.heading,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 7),
           ],
           Padding(
@@ -1175,6 +1207,21 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
                     ),
                   ),
                 ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 8, top: 3),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'Rating $_rating',
+                  key: const Key('puzzle-player-rating'),
+                  style: const TextStyle(
+                    color: AppColors.heading,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 6),
@@ -1327,12 +1374,12 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
 
     if (!_isBot && !solved) {
       _playPuzzleReply();
-    } else if (solved && widget.activity == ChessActivity.dailyPuzzle) {
-      unawaited(_completeDailyPuzzle());
+    } else if (solved) {
+      unawaited(_awardPuzzleCompletion());
     } else if (_isBot &&
         _game.in_checkmate &&
         _game.turn == chess.Color.BLACK) {
-      _handlePlayerWin();
+      unawaited(_handlePlayerWin());
     } else if (_isBot && !_game.game_over) {
       _playBotMove();
     }
@@ -1412,7 +1459,7 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
     });
   }
 
-  Future<void> _completeDailyPuzzle() async {
+  Future<void> _completeDailyPuzzle({required bool ratingAwarded}) async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.setString(
       _dailyPuzzleCompletionKey,
@@ -1425,6 +1472,7 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
         key: const Key('daily-puzzle-complete-toast'),
         content: Text(
           'Daily Puzzle completed for ${_formatPuzzleDate(_dailyDate)}. '
+          '${ratingAwarded ? 'Rating +1. ' : ''}'
           'A new puzzle will unlock tomorrow, ${_formatPuzzleDate(tomorrow)}.',
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
@@ -1432,6 +1480,61 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
         duration: const Duration(seconds: 6),
         backgroundColor: const Color(0xFF16794C),
       ),
+    );
+  }
+
+  Future<void> _awardPuzzleCompletion() async {
+    if (_puzzleAwarding) return;
+    _puzzleAwarding = true;
+    try {
+      final progress = widget.apiClient == null
+          ? (awarded: true, rating: _rating + 1, level: _playerLevel)
+          : await _completePuzzleOnServer();
+      if (!mounted) return;
+      setState(() {
+        _rating = progress.rating;
+        _playerLevel = progress.level;
+      });
+
+      if (widget.activity == ChessActivity.dailyPuzzle) {
+        await _completeDailyPuzzle(ratingAwarded: progress.awarded);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            key: const Key('puzzle-rating-toast'),
+            content: Text(
+              progress.awarded
+                  ? 'Puzzle completed! Rating +1. Your rating is ${progress.rating}.'
+                  : 'This puzzle was already rewarded. Rating ${progress.rating}.',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFF16794C),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _notice =
+              'Puzzle completed, but rating could not sync. Please try again.';
+        });
+      }
+    } finally {
+      _puzzleAwarding = false;
+    }
+  }
+
+  Future<({bool awarded, int rating, int level})>
+  _completePuzzleOnServer() async {
+    final progress = await widget.apiClient!.completePuzzle(
+      puzzleId: _puzzle.id,
+      theme: _puzzle.theme,
+    );
+    return (
+      awarded: progress.awarded,
+      rating: progress.rating,
+      level: progress.level,
     );
   }
 
@@ -1477,35 +1580,70 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
     _solutionStep = 0;
     _puzzleReplyTimer?.cancel();
     _botThinking = false;
+    if (_isBot) {
+      _botGameId =
+          '${DateTime.now().microsecondsSinceEpoch}-${_puzzleRandom.nextInt(1 << 32)}';
+      _botWinReported = false;
+    }
     if (notify && mounted) setState(() {});
   }
 
-  void _handlePlayerWin() {
-    final upgradedLevel = switch (_botLevel) {
-      'Beginner' => 'Intermediate',
-      'Intermediate' => 'Advanced',
-      _ => 'Advanced',
-    };
-    setState(() => _botLevel = upgradedLevel);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        key: const Key('level-up-toast'),
-        content: const Text(
-          'Congratulation your level is upgrade. Thank you!',
-          style: TextStyle(fontWeight: FontWeight.w800),
+  Future<void> _handlePlayerWin() async {
+    if (_botWinReported) return;
+    _botWinReported = true;
+    try {
+      final progress = widget.apiClient == null
+          ? (awarded: true, rating: _rating, level: _playerLevel + 1)
+          : await _completeBotGameOnServer();
+      if (!mounted) return;
+      setState(() {
+        _rating = progress.rating;
+        _playerLevel = progress.level;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          key: const Key('level-up-toast'),
+          content: Text(
+            progress.awarded
+                ? 'Bot defeated! Level +1. You are now Level ${progress.level}.'
+                : 'This bot game was already rewarded. Level ${progress.level}.',
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF16794C),
+          duration: const Duration(seconds: 4),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF16794C),
-        duration: const Duration(seconds: 4),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
-    );
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _notice = 'You won, but your level could not sync. Please try again.';
+        });
+      }
+      return;
+    }
     _homeRedirectTimer?.cancel();
     _homeRedirectTimer = Timer(const Duration(seconds: 4), () {
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
     });
+  }
+
+  Future<({bool awarded, int rating, int level})>
+  _completeBotGameOnServer() async {
+    final progress = await widget.apiClient!.completeBotGame(
+      gameId: _botGameId,
+      difficulty: _botLevel,
+    );
+    return (
+      awarded: progress.awarded,
+      rating: progress.rating,
+      level: progress.level,
+    );
   }
 }
 

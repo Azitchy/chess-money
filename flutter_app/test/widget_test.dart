@@ -58,6 +58,7 @@ void main() {
       'id': '7',
       'rating': '1',
       'level': '1',
+      'awarded': true,
     });
 
     expect(summary.betAmount, 12.5);
@@ -65,6 +66,7 @@ void main() {
     expect(live.moves.single.to, 'e4');
     expect(progress.rating, 1);
     expect(progress.level, 1);
+    expect(progress.awarded, isTrue);
   });
 
   testWidgets('chess pieces use pure white and black fills', (tester) async {
@@ -319,6 +321,9 @@ void main() {
 
     expect(find.textContaining('Correct! Qh4 is checkmate'), findsOneWidget);
     expect(find.textContaining('Qh4#'), findsOneWidget);
+    expect(find.byKey(const Key('puzzle-rating-toast')), findsOneWidget);
+    expect(find.textContaining('Rating +1'), findsOneWidget);
+    expect(find.text('Rating 1'), findsOneWidget);
   });
 
   testWidgets('multi-move puzzle plays a reply and asks for continuation', (
@@ -433,7 +438,7 @@ void main() {
     expect(find.textContaining('e4'), findsOneWidget);
   });
 
-  testWidgets('player checkmate shows level-up toast and upgrades bot', (
+  testWidgets('player checkmate shows level-up toast and increments level', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(800, 1200);
@@ -461,9 +466,10 @@ void main() {
 
     expect(find.byKey(const Key('level-up-toast')), findsOneWidget);
     expect(
-      find.text('Congratulation your level is upgrade. Thank you!'),
+      find.text('Bot defeated! Level +1. You are now Level 1.'),
       findsOneWidget,
     );
+    expect(find.text('Level 1'), findsOneWidget);
     expect(find.text('Checkmate — White wins'), findsOneWidget);
   });
 

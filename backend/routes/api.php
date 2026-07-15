@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MatchController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\PresenceController;
+use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WalletController;
 use Illuminate\Support\Facades\Route;
@@ -24,6 +25,9 @@ Route::middleware('token.auth')->group(function () {
     Route::get('/wallet', [WalletController::class, 'show']);
     Route::get('/wallet/transactions', [WalletController::class, 'transactions']);
     Route::post('/wallet/request-funds', [WalletController::class, 'requestFunds']);
+
+    Route::post('/progress/puzzle-completed', [ProgressController::class, 'puzzleCompleted']);
+    Route::post('/progress/bot-won', [ProgressController::class, 'botWon']);
 
     Route::post('/matches', [MatchController::class, 'create']);
     Route::get('/matches/history', [MatchController::class, 'history']);

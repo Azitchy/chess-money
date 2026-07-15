@@ -167,6 +167,34 @@ class ApiClient {
     return PlayerProgress.fromJson(data);
   }
 
+  Future<PlayerProgress> completePuzzle({
+    required String puzzleId,
+    required String theme,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse('$_baseUrl/progress/puzzle-completed'),
+          headers: _headers,
+          body: jsonEncode({'puzzle_id': puzzleId, 'theme': theme}),
+        )
+        .timeout(_requestTimeout);
+    return PlayerProgress.fromJson(_decode(response));
+  }
+
+  Future<PlayerProgress> completeBotGame({
+    required String gameId,
+    required String difficulty,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse('$_baseUrl/progress/bot-won'),
+          headers: _headers,
+          body: jsonEncode({'game_id': gameId, 'difficulty': difficulty}),
+        )
+        .timeout(_requestTimeout);
+    return PlayerProgress.fromJson(_decode(response));
+  }
+
   Future<List<dynamic>> getMatchHistory() async {
     final response = await http
         .get(Uri.parse('$_baseUrl/matches/history'), headers: _headers)
