@@ -182,6 +182,24 @@ class ApiClient {
         .toList(growable: false);
   }
 
+  Future<bool> getPresence() async {
+    final response = await http
+        .get(Uri.parse('$_baseUrl/presence'), headers: _headers)
+        .timeout(_requestTimeout);
+    return _decode(response)['is_online'] == true;
+  }
+
+  Future<bool> updatePresence(bool isOnline) async {
+    final response = await http
+        .post(
+          Uri.parse('$_baseUrl/presence'),
+          headers: _headers,
+          body: jsonEncode({'is_online': isOnline}),
+        )
+        .timeout(_requestTimeout);
+    return _decode(response)['is_online'] == true;
+  }
+
   Future<UserProfile> getProfile() async {
     final response = await http
         .get(Uri.parse('$_baseUrl/profile'), headers: _headers)

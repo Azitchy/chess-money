@@ -477,7 +477,7 @@ class PlayerTile extends StatelessWidget {
   });
 
   final RegisteredUser user;
-  final VoidCallback onChallenge;
+  final VoidCallback? onChallenge;
   final String buttonLabel;
   final bool selected;
 

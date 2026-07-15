@@ -23,6 +23,7 @@ class AuthController extends Controller
         $user = User::create($data);
         $plainToken = Str::random(60);
         $user->api_token = hash('sha256', $plainToken);
+        $user->is_online = true;
         $user->last_seen_at = now();
         $user->save();
 
@@ -50,6 +51,7 @@ class AuthController extends Controller
 
         $plainToken = Str::random(60);
         $user->api_token = hash('sha256', $plainToken);
+        $user->is_online = true;
         $user->last_seen_at = now();
         $user->save();
 
@@ -65,6 +67,7 @@ class AuthController extends Controller
     {
         $user = $request->user();
         $user->api_token = null;
+        $user->is_online = false;
         $user->save();
 
         return response()->json(['message' => 'Logged out']);

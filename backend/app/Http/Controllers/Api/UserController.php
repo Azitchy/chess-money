@@ -12,18 +12,29 @@ class UserController extends Controller
     {
         $currentUserId = $request->user()->id;
         $onlineWindowSeconds = 120;
-        $onlineSince = now()->subSeconds($onlineWindowSeconds);
-
         $users = User::query()
             ->where('id', '!=', $currentUserId)
             ->where('is_active', true)
-            ->whereNotNull('api_token')
-            ->where('last_seen_at', '>=', $onlineSince)
+            ->orderByDesc('is_online')
             ->orderByDesc('last_seen_at')
-            ->get(['id', 'name', 'username', 'email', 'avatar_path', 'last_seen_at']);
+            ->get([
+                'id',
+                'name',
+                'username',
+                'email',
+                'avatar_path',
+                'is_online',
+                'last_seen_at',
+                'api_token',
+            ]);
 
         return response()->json([
-            'data' => $users->map(function (User $user) {
+            'data' => $users->map(function (User $user) use ($onlineWindowSeconds) {
+                $isOnline = $user->is_online
+                    && $user->api_token
+                    && $user->last_seen_at
+                    && $user->last_seen_at->diffInSeconds(now()) <= $onlineWindowSeconds;
+
                 return [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -33,7 +44,7 @@ class UserController extends Controller
                         ? '/storage/'.$user->avatar_path
                         : null,
                     'last_seen_at' => $user->last_seen_at,
-                    'is_online' => true,
+                    'is_online' => (bool) $isOnline,
                 ];
             })->values(),
         ]);

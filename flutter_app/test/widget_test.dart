@@ -17,6 +17,14 @@ void main() {
     isOnline: true,
     lastSeenAt: null,
   );
+  const offlinePlayer = RegisteredUser(
+    id: 8,
+    name: 'Leo Rook',
+    username: 'leo_rook',
+    email: 'leo@example.com',
+    isOnline: false,
+    lastSeenAt: null,
+  );
 
   testWidgets('online player tile shows avatar, status, and challenge action', (
     tester,
@@ -36,6 +44,83 @@ void main() {
     expect(find.text('MK'), findsOneWidget);
     expect(find.text('Online now'), findsOneWidget);
     expect(find.text('Send challenge'), findsOneWidget);
+  });
+
+  testWidgets('offline player tile shows status and disables challenges', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: PlayerTile(
+            user: offlinePlayer,
+            buttonLabel: 'Offline',
+            onChallenge: null,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Offline'), findsNWidgets(2));
+    final button = tester.widget<FilledButton>(find.byType(FilledButton));
+    expect(button.onPressed, isNull);
+  });
+
+  testWidgets('dashboard presence pill switches online and offline', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final apiClient = await ApiClient.create();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DashboardScreen(
+          apiClient: apiClient,
+          demoMode: true,
+          onLogout: () {},
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    var presenceSwitch = tester.widget<Switch>(
+      find.byKey(const Key('presence-switch')),
+    );
+    expect(presenceSwitch.value, isTrue);
+
+    await tester.tap(find.byKey(const Key('presence-switch')));
+    await tester.pump();
+    presenceSwitch = tester.widget<Switch>(
+      find.byKey(const Key('presence-switch')),
+    );
+    expect(presenceSwitch.value, isFalse);
+    expect(find.text('You are now offline'), findsOneWidget);
+  });
+
+  testWidgets('home shows chess activities and opens puzzle practice', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final apiClient = await ApiClient.create();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DashboardScreen(
+          apiClient: apiClient,
+          demoMode: true,
+          onLogout: () {},
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('solve-puzzles-card')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('solve-puzzles-card')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Find the strongest move for White.'), findsOneWidget);
+    expect(find.byType(ChessActivityScreen), findsOneWidget);
   });
 
   testWidgets('challenge success screen prominently shows the new match ID', (

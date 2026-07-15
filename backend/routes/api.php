@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MatchController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\PresenceController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WalletController;
 use Illuminate\Support\Facades\Route;
@@ -15,6 +16,8 @@ Route::middleware('token.auth')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::post('/profile', [ProfileController::class, 'update']);
+    Route::get('/presence', [PresenceController::class, 'show']);
+    Route::post('/presence', [PresenceController::class, 'update']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/users', [UserController::class, 'index']);
 

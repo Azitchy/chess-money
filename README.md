@@ -64,6 +64,10 @@ Profile:
 - `GET /api/profile`
 - `POST /api/profile` (multipart form data; optional `avatar` image up to 5 MB)
 
+Presence:
+- `GET /api/presence`
+- `POST /api/presence` with `{ "is_online": true|false }`
+
 Wallet:
 - `GET /api/wallet`
 - `GET /api/wallet/transactions`

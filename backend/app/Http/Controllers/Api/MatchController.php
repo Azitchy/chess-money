@@ -30,6 +30,21 @@ class MatchController extends Controller
             return response()->json(['message' => 'Cannot challenge yourself'], 422);
         }
 
+        if (isset($data['opponent_id'])) {
+            $opponent = User::findOrFail($data['opponent_id']);
+            $opponentIsOnline = $opponent->is_active
+                && $opponent->is_online
+                && $opponent->api_token
+                && $opponent->last_seen_at
+                && $opponent->last_seen_at->diffInSeconds(now()) <= 120;
+
+            if (! $opponentIsOnline) {
+                return response()->json([
+                    'message' => 'This player is currently offline',
+                ], 422);
+            }
+        }
+
         $match = MatchGame::create([
             'player_1_id' => $request->user()->id,
             'challenged_user_id' => $data['opponent_id'] ?? null,
