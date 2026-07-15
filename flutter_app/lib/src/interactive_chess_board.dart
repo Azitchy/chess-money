@@ -242,9 +242,15 @@ class ClassicChessPieceIcon extends StatelessWidget {
                     ],
             ),
           ),
-          Text(
-            symbol,
-            style: TextStyle(fontSize: size, height: 1, color: fillColor),
+          ColorFiltered(
+            // Some Android builds render individual chess characters with a
+            // colored/gray fallback font. Force the complete glyph silhouette
+            // to the side's single color so pawns and major pieces match.
+            colorFilter: ColorFilter.mode(fillColor, BlendMode.srcIn),
+            child: Text(
+              symbol,
+              style: TextStyle(fontSize: size, height: 1, color: fillColor),
+            ),
           ),
         ],
       ),
@@ -254,12 +260,13 @@ class ClassicChessPieceIcon extends StatelessWidget {
 
 String _pieceSymbol(String pieceType) {
   const symbols = {
-    'k': '\u265A',
-    'q': '\u265B',
-    'r': '\u265C',
-    'b': '\u265D',
-    'n': '\u265E',
-    'p': '\u265F',
+    // FE0E requests monochrome text presentation instead of an emoji glyph.
+    'k': '\u2654\uFE0E',
+    'q': '\u2655\uFE0E',
+    'r': '\u2656\uFE0E',
+    'b': '\u2657\uFE0E',
+    'n': '\u2658\uFE0E',
+    'p': '\u2659\uFE0E',
   };
   return symbols[pieceType] ?? '';
 }
