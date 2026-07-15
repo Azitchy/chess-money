@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../registered_user.dart';
+import '../live_match.dart';
+import '../player_progress.dart';
 import '../user_profile.dart';
 
 class ApiClient {
@@ -154,7 +156,15 @@ class ApiClient {
         .get(Uri.parse('$_baseUrl/wallet'), headers: _headers)
         .timeout(_requestTimeout);
     final data = _decode(response);
-    return (data['balance'] as num).toDouble();
+    return double.tryParse(data['balance']?.toString() ?? '') ?? 0;
+  }
+
+  Future<PlayerProgress> getPlayerProgress() async {
+    final response = await http
+        .get(Uri.parse('$_baseUrl/me'), headers: _headers)
+        .timeout(_requestTimeout);
+    final data = _decode(response);
+    return PlayerProgress.fromJson(data);
   }
 
   Future<List<dynamic>> getMatchHistory() async {
@@ -174,10 +184,8 @@ class ApiClient {
     return users
         .whereType<Map<String, dynamic>>()
         .map(
-          (json) => RegisteredUser.fromJson(
-            json,
-            resolveAvatarUrl: resolveMediaUrl,
-          ),
+          (json) =>
+              RegisteredUser.fromJson(json, resolveAvatarUrl: resolveMediaUrl),
         )
         .toList(growable: false);
   }
@@ -299,14 +307,61 @@ class ApiClient {
     return _decode(response);
   }
 
-  Future<void> joinMatch(int matchId) async {
+  Future<LiveMatch> acceptChallenge(int matchId) async {
     final response = await http
-        .post(Uri.parse('$_baseUrl/matches/$matchId/join'), headers: _headers)
+        .post(Uri.parse('$_baseUrl/matches/$matchId/accept'), headers: _headers)
+        .timeout(_requestTimeout);
+    final data = _decode(response);
+    return LiveMatch.fromJson(data['match'] as Map<String, dynamic>);
+  }
+
+  Future<List<LiveMatch>> getChallenges() async {
+    final response = await http
+        .get(Uri.parse('$_baseUrl/matches/challenges'), headers: _headers)
+        .timeout(_requestTimeout);
+    return _liveMatchList(_decode(response)['data']);
+  }
+
+  Future<List<LiveMatch>> getActiveMatches() async {
+    final response = await http
+        .get(Uri.parse('$_baseUrl/matches/active'), headers: _headers)
+        .timeout(_requestTimeout);
+    return _liveMatchList(_decode(response)['data']);
+  }
+
+  Future<void> rejectChallenge(int matchId) async {
+    final response = await http
+        .post(Uri.parse('$_baseUrl/matches/$matchId/reject'), headers: _headers)
         .timeout(_requestTimeout);
     _decode(response);
   }
 
-  Future<void> endMatch(int matchId, String result) async {
+  Future<LiveMatch> getMatchState(int matchId) async {
+    final response = await http
+        .get(Uri.parse('$_baseUrl/matches/$matchId/state'), headers: _headers)
+        .timeout(_requestTimeout);
+    final data = _decode(response);
+    return LiveMatch.fromJson(data['match'] as Map<String, dynamic>);
+  }
+
+  Future<LiveMatch> submitMove(
+    int matchId, {
+    required String from,
+    required String to,
+    String promotion = 'q',
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse('$_baseUrl/matches/$matchId/move'),
+          headers: _headers,
+          body: jsonEncode({'from': from, 'to': to, 'promotion': promotion}),
+        )
+        .timeout(_requestTimeout);
+    final data = _decode(response);
+    return LiveMatch.fromJson(data['match'] as Map<String, dynamic>);
+  }
+
+  Future<bool> endMatch(int matchId, String result) async {
     final response = await http
         .post(
           Uri.parse('$_baseUrl/matches/$matchId/end'),
@@ -314,7 +369,15 @@ class ApiClient {
           body: jsonEncode({'result': result}),
         )
         .timeout(_requestTimeout);
-    _decode(response);
+    return _decode(response)['confirmed'] == true;
+  }
+
+  List<LiveMatch> _liveMatchList(Object? value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map<String, dynamic>>()
+        .map(LiveMatch.fromJson)
+        .toList(growable: false);
   }
 
   Future<Map<String, dynamic>> _handleAuthResponse(

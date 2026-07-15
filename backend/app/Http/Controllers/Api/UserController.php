@@ -26,6 +26,8 @@ class UserController extends Controller
                 'is_online',
                 'last_seen_at',
                 'api_token',
+                'rating',
+                'level',
             ]);
 
         return response()->json([
@@ -45,6 +47,8 @@ class UserController extends Controller
                         : null,
                     'last_seen_at' => $user->last_seen_at,
                     'is_online' => (bool) $isOnline,
+                    'rating' => (int) $user->rating,
+                    'level' => (int) $user->level,
                 ];
             })->values(),
         ]);

@@ -78,10 +78,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Column(
                       children: [
                         if (_error != null) ...[
-                          _ProfileMessage(
-                            message: _error!,
-                            isError: true,
-                          ),
+                          _ProfileMessage(message: _error!, isError: true),
                           const SizedBox(height: 16),
                         ],
                         _buildAvatar(),
@@ -93,15 +90,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 10,
+                          children: [
+                            Chip(
+                              avatar: const Icon(Icons.star_rounded, size: 18),
+                              label: Text('Rating ${_profile?.rating ?? 0}'),
+                            ),
+                            Chip(
+                              avatar: const Icon(
+                                Icons.military_tech_rounded,
+                                size: 18,
+                              ),
+                              label: Text('Level ${_profile?.level ?? 0}'),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 24),
                         Container(
                           padding: const EdgeInsets.all(18),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(26),
-                            border: Border.all(
-                              color: const Color(0xFFDDE9FF),
-                            ),
+                            border: Border.all(color: const Color(0xFFDDE9FF)),
                           ),
                           child: Column(
                             children: [
@@ -313,6 +325,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               phoneNumber: _phone.text.trim(),
               address: _address.text.trim(),
               avatarUrl: _profile!.avatarUrl,
+              rating: _profile!.rating,
+              level: _profile!.level,
             )
           : await widget.apiClient.updateProfile(
               name: _name.text.trim(),
@@ -360,9 +374,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   FormFieldValidator<String> _requiredValidator(String label) {
-    return (value) => value == null || value.trim().isEmpty
-        ? '$label is required'
-        : null;
+    return (value) =>
+        value == null || value.trim().isEmpty ? '$label is required' : null;
   }
 
   String? _emailValidator(String? value) {

@@ -20,6 +20,10 @@ class User extends Authenticatable
         'address',
         'password',
         'wallet_balance',
+        'rating',
+        'level',
+        'rating',
+        'level',
         'is_admin',
         'is_active',
         'is_online',
@@ -40,6 +44,10 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'wallet_balance' => 'decimal:2',
+            'rating' => 'integer',
+            'level' => 'integer',
+            'rating' => 'integer',
+            'level' => 'integer',
             'is_admin' => 'boolean',
             'is_active' => 'boolean',
             'is_online' => 'boolean',
@@ -50,5 +58,12 @@ class User extends Authenticatable
     public function walletTransactions(): HasMany
     {
         return $this->hasMany(WalletTransaction::class);
+    }
+
+    public function isCurrentlyOnline(): bool
+    {
+        return $this->is_active
+            && $this->is_online
+            && $this->api_token !== null;
     }
 }

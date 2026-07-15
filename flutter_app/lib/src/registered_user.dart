@@ -7,6 +7,8 @@ class RegisteredUser {
     required this.isOnline,
     required this.lastSeenAt,
     this.avatarUrl,
+    this.rating = 0,
+    this.level = 0,
   });
 
   final int id;
@@ -16,6 +18,8 @@ class RegisteredUser {
   final bool isOnline;
   final DateTime? lastSeenAt;
   final String? avatarUrl;
+  final int rating;
+  final int level;
 
   factory RegisteredUser.fromJson(
     Map<String, dynamic> json, {
@@ -32,6 +36,8 @@ class RegisteredUser {
       avatarUrl: resolveAvatarUrl == null
           ? rawAvatarUrl
           : resolveAvatarUrl(rawAvatarUrl),
+      rating: int.tryParse(json['rating']?.toString() ?? '') ?? 0,
+      level: int.tryParse(json['level']?.toString() ?? '') ?? 0,
     );
   }
 }

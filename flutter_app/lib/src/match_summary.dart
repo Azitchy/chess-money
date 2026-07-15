@@ -14,12 +14,15 @@ class MatchSummary {
   final int? winnerId;
 
   factory MatchSummary.fromJson(Map<String, dynamic> json) {
+    final rawBetAmount = json['bet_amount'];
     return MatchSummary(
-      id: (json['id'] as num).toInt(),
+      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
       status: json['status']?.toString() ?? 'unknown',
       mode: json['mode']?.toString() ?? 'unknown',
-      betAmount: (json['bet_amount'] as num?) ?? 0,
-      winnerId: (json['winner_id'] as num?)?.toInt(),
+      betAmount: rawBetAmount is num
+          ? rawBetAmount
+          : num.tryParse(rawBetAmount?.toString() ?? '') ?? 0,
+      winnerId: int.tryParse(json['winner_id']?.toString() ?? ''),
     );
   }
 }

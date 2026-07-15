@@ -9,7 +9,7 @@
 <div class="card">
   <table>
     <thead>
-      <tr><th>ID</th><th>Name</th><th>Email</th><th>Wallet</th><th>Role</th><th>Status</th><th>Actions</th></tr>
+      <tr><th>ID</th><th>Name</th><th>Email</th><th>Rating</th><th>Level</th><th>Wallet</th><th>Role</th><th>Status</th><th>Actions</th></tr>
     </thead>
     <tbody>
     @foreach($users as $user)
@@ -17,6 +17,8 @@
         <td>{{ $user->id }}</td>
         <td>{{ $user->name }}</td>
         <td>{{ $user->email }}</td>
+        <td>{{ $user->rating }}</td>
+        <td>{{ $user->level }}</td>
         <td>${{ number_format((float)$user->wallet_balance,2) }}</td>
         <td>{{ $user->is_admin ? 'Admin' : 'Player' }}</td>
         <td>

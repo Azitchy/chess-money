@@ -7,6 +7,8 @@ class UserProfile {
     required this.phoneNumber,
     required this.address,
     required this.avatarUrl,
+    this.rating = 0,
+    this.level = 0,
   });
 
   final int id;
@@ -16,6 +18,8 @@ class UserProfile {
   final String phoneNumber;
   final String address;
   final String? avatarUrl;
+  final int rating;
+  final int level;
 
   factory UserProfile.fromJson(
     Map<String, dynamic> json, {
@@ -32,6 +36,8 @@ class UserProfile {
       avatarUrl: resolveAvatarUrl == null
           ? rawAvatarUrl
           : resolveAvatarUrl(rawAvatarUrl),
+      rating: int.tryParse(json['rating']?.toString() ?? '') ?? 0,
+      level: int.tryParse(json['level']?.toString() ?? '') ?? 0,
     );
   }
 }

@@ -64,6 +64,8 @@ class ProfileController extends Controller
             'avatar_url' => $user->avatar_path
                 ? '/storage/'.$user->avatar_path
                 : null,
+            'rating' => (int) $user->rating,
+            'level' => (int) $user->level,
         ];
     }
 }

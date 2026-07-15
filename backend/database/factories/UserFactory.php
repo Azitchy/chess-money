@@ -32,6 +32,8 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'wallet_balance' => fake()->randomFloat(2, 0, 200),
+            'rating' => 0,
+            'level' => 0,
             'is_admin' => false,
             'remember_token' => Str::random(10),
         ];

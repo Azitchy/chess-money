@@ -528,6 +528,11 @@ class PlayerTile extends StatelessWidget {
                           ? const Color(0xFF16794C)
                           : const Color(0xFF475569),
                     ),
+                    _StatusChip(
+                      label: 'Rating ${user.rating} • Level ${user.level}',
+                      background: const Color(0xFFFFF4E5),
+                      foreground: const Color(0xFFB45309),
+                    ),
                     if (user.lastSeenAt != null)
                       _StatusChip(
                         label: 'Seen ${_relativeTime(user.lastSeenAt!)}',

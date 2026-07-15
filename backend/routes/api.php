@@ -26,9 +26,14 @@ Route::middleware('token.auth')->group(function () {
     Route::post('/wallet/request-funds', [WalletController::class, 'requestFunds']);
 
     Route::post('/matches', [MatchController::class, 'create']);
-    Route::post('/matches/{match}/join', [MatchController::class, 'join']);
-    Route::post('/matches/{match}/end', [MatchController::class, 'end']);
     Route::get('/matches/history', [MatchController::class, 'history']);
+    Route::get('/matches/challenges', [MatchController::class, 'challenges']);
+    Route::get('/matches/active', [MatchController::class, 'active']);
+    Route::post('/matches/{match}/accept', [MatchController::class, 'accept']);
+    Route::post('/matches/{match}/reject', [MatchController::class, 'reject']);
+    Route::get('/matches/{match}/state', [MatchController::class, 'state']);
+    Route::post('/matches/{match}/move', [MatchController::class, 'move']);
+    Route::post('/matches/{match}/end', [MatchController::class, 'end']);
 
     Route::middleware('admin.only')->group(function () {
         Route::get('/admin/funding-requests', [AdminController::class, 'fundingRequests']);

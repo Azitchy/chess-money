@@ -1,14 +1,19 @@
 import 'dart:async';
+import 'dart:math';
 
+import 'package:chess/chess.dart' as chess;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_colors.dart';
 import '../dashboard_widgets.dart';
+import '../interactive_chess_board.dart';
+import '../live_match.dart';
 import '../match_summary.dart';
 import '../registered_user.dart';
 import '../services/api_client.dart';
 import 'profile_screen.dart';
+import 'network_chess_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
@@ -31,7 +36,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     'Home',
     'Online Players',
     'Wallet Funding',
-    'Join / End Match',
+    'Match Center',
     'Recent Matches',
   ];
 
@@ -39,6 +44,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isOnline = true;
   bool _updatingPresence = false;
   Timer? _presenceHeartbeat;
+  Timer? _challengePoller;
+  bool _pollingMatches = false;
+  int? _currentUserId;
+  int _rating = 0;
+  int _level = 0;
+  List<LiveMatch> _challenges = const [];
+  final Set<int> _announcedChallenges = {};
+  final Set<int> _openedMatches = {};
   int _selectedIndex = 0;
   String? _error;
   double _balance = 0;
@@ -48,8 +61,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _fundAmount = TextEditingController();
   final _fundNote = TextEditingController();
   final _playerSearch = TextEditingController();
-
-  final _matchId = TextEditingController();
 
   @override
   void initState() {
@@ -65,11 +76,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _presenceHeartbeat?.cancel();
+    _challengePoller?.cancel();
     _playerSearch.removeListener(_handleSearchChanged);
     _fundAmount.dispose();
     _fundNote.dispose();
     _playerSearch.dispose();
-    _matchId.dispose();
     super.dispose();
   }
 
@@ -96,6 +107,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
             isUpdating: _updatingPresence,
             onChanged: _updatePresence,
           ),
+          if (!widget.demoMode)
+            Badge(
+              isLabelVisible: _challenges.isNotEmpty,
+              label: Text('${_challenges.length}'),
+              child: IconButton(
+                tooltip: 'Match challenges',
+                onPressed: _showChallengeInbox,
+                icon: const Icon(Icons.notifications_outlined),
+                color: AppColors.deepPurple,
+              ),
+            ),
           IconButton(
             tooltip: 'My profile',
             onPressed: () {
@@ -230,7 +252,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         accent: const Color(0xFFF56A2D),
         icon: Icons.extension_rounded,
         boardVariant: 0,
-        badge: 'Rating 1312',
+        badge: 'Rating $_rating',
         onTap: () => _openChessActivity(
           title: 'Solve Puzzles',
           subtitle: 'Find the strongest move for White.',
@@ -262,7 +284,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         accent: const Color(0xFF5B7BD5),
         icon: Icons.smart_toy_rounded,
         boardVariant: 2,
-        badge: '3 levels',
+        badge: 'Level $_level',
         onTap: () => _openChessActivity(
           title: 'Play Bots',
           subtitle: 'Choose a bot and sharpen your game.',
@@ -413,43 +435,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildMatchActionsPage() {
     return _buildPage('match-actions', [
       SectionCard(
-        title: 'Join / End Match',
-        icon: Icons.call_merge_outlined,
+        title: 'Match Invitations',
+        icon: Icons.notifications_active_outlined,
         child: Column(
           children: [
-            DashboardInputField(
-              controller: _matchId,
-              label: 'Match ID',
-              keyboardType: TextInputType.number,
+            const Text(
+              'A chess match starts only after the challenged player accepts its notification. Manual joining by Match ID is disabled.',
+              style: TextStyle(color: AppColors.mutedText, height: 1.45),
             ),
             const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                MiniActionButton(
-                  label: 'Join',
-                  onPressed: widget.demoMode ? _demoAction : _joinMatch,
-                ),
-                MiniActionButton(
-                  label: 'P1 Win',
-                  onPressed: widget.demoMode
-                      ? _demoAction
-                      : () => _endMatch('player1_win'),
-                ),
-                MiniActionButton(
-                  label: 'P2 Win',
-                  onPressed: widget.demoMode
-                      ? _demoAction
-                      : () => _endMatch('player2_win'),
-                ),
-                MiniActionButton(
-                  label: 'Draw',
-                  onPressed: widget.demoMode
-                      ? _demoAction
-                      : () => _endMatch('draw'),
-                ),
-              ],
+            PrimaryActionButton(
+              label: _challenges.isEmpty
+                  ? 'Check notifications'
+                  : 'View ${_challenges.length} challenge${_challenges.length == 1 ? '' : 's'}',
+              onPressed: widget.demoMode ? _demoAction : _showChallengeInbox,
             ),
           ],
         ),
@@ -484,11 +483,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     try {
       final balance = await widget.apiClient.getWalletBalance();
+      final progress = await widget.apiClient.getPlayerProgress();
       final history = await widget.apiClient.getMatchHistory();
       final users = await widget.apiClient.getUsers();
       final isOnline = await widget.apiClient.getPresence();
       setState(() {
         _balance = balance;
+        _currentUserId = progress.userId;
+        _rating = progress.rating;
+        _level = progress.level;
         _history = history
             .whereType<Map<String, dynamic>>()
             .map(MatchSummary.fromJson)
@@ -497,6 +500,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _isOnline = isOnline;
       });
       _syncPresenceHeartbeat();
+      _syncChallengePolling();
     } catch (e) {
       setState(() => _error = _friendlyError(e));
     } finally {
@@ -520,6 +524,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     setState(() {
       _balance = 128.50;
+      _rating = 0;
+      _level = 0;
       _history = const [
         MatchSummary(
           id: 101,
@@ -580,24 +586,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           context,
         ).showSnackBar(const SnackBar(content: Text('Funding request sent')));
       }
-    } catch (e) {
-      setState(() => _error = _friendlyError(e));
-    }
-  }
-
-  Future<void> _joinMatch() async {
-    try {
-      await widget.apiClient.joinMatch(int.parse(_matchId.text.trim()));
-      await _load();
-    } catch (e) {
-      setState(() => _error = _friendlyError(e));
-    }
-  }
-
-  Future<void> _endMatch(String result) async {
-    try {
-      await widget.apiClient.endMatch(int.parse(_matchId.text.trim()), result);
-      await _load();
     } catch (e) {
       setState(() => _error = _friendlyError(e));
     }
@@ -701,7 +689,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return;
       }
 
-      final matchId = (created['id'] as num).toInt();
+      final matchId = int.tryParse(created['id']?.toString() ?? '') ?? 0;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => ChallengeSuccessScreen(
@@ -723,6 +711,141 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } finally {
       betController.dispose();
     }
+  }
+
+  void _syncChallengePolling() {
+    _challengePoller?.cancel();
+    if (widget.demoMode || !_isOnline) return;
+    _challengePoller = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _pollMatches(),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _pollMatches());
+  }
+
+  Future<void> _pollMatches() async {
+    if (_pollingMatches || !mounted || widget.demoMode) return;
+    _pollingMatches = true;
+    try {
+      final challenges = await widget.apiClient.getChallenges();
+      final activeMatches = await widget.apiClient.getActiveMatches();
+      if (!mounted) return;
+      setState(() => _challenges = challenges);
+
+      final newChallenge = challenges
+          .where((match) => !_announcedChallenges.contains(match.id))
+          .firstOrNull;
+      if (newChallenge != null) {
+        _announcedChallenges.add(newChallenge.id);
+        await _showIncomingChallenge(newChallenge);
+      }
+
+      final accepted = activeMatches
+          .where((match) => !_openedMatches.contains(match.id))
+          .firstOrNull;
+      if (accepted != null && mounted) {
+        _openedMatches.add(accepted.id);
+        await _openNetworkMatch(accepted);
+      }
+    } catch (_) {
+      // Keep dashboard polling unobtrusive; manual refresh still reports errors.
+    } finally {
+      _pollingMatches = false;
+    }
+  }
+
+  Future<void> _showChallengeInbox() async {
+    await _pollMatches();
+    if (!mounted) return;
+    if (_challenges.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No pending challenges.')));
+      return;
+    }
+    await _showIncomingChallenge(_challenges.first);
+  }
+
+  Future<void> _showIncomingChallenge(LiveMatch match) async {
+    if (!mounted) return;
+    final action = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(
+          Icons.sports_esports_rounded,
+          size: 42,
+          color: AppColors.deepPurple,
+        ),
+        title: const Text('New chess challenge'),
+        content: Text(
+          '${match.playerOne?.name ?? 'A player'} challenged you.\n\n'
+          'Stake: ${match.betAmount.toStringAsFixed(2)}\n'
+          'Time: ${_titleCase(match.timeControl)}\n\n'
+          'On acceptance, the stake is locked from both wallets.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, 'reject'),
+            child: const Text('Reject'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, 'accept'),
+            child: const Text('Accept & play'),
+          ),
+        ],
+      ),
+    );
+    if (action == null || !mounted) return;
+    try {
+      if (action == 'reject') {
+        await widget.apiClient.rejectChallenge(match.id);
+        if (mounted) {
+          setState(
+            () => _challenges = _challenges
+                .where((item) => item.id != match.id)
+                .toList(),
+          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Challenge rejected')));
+        }
+        return;
+      }
+      final active = await widget.apiClient.acceptChallenge(match.id);
+      _openedMatches.add(active.id);
+      if (mounted) {
+        setState(
+          () => _challenges = _challenges
+              .where((item) => item.id != match.id)
+              .toList(),
+        );
+        await _openNetworkMatch(active);
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = _friendlyError(error));
+    } finally {
+      if (mounted) await _pollMatches();
+    }
+  }
+
+  Future<void> _openNetworkMatch(LiveMatch match) async {
+    final userId = _currentUserId;
+    if (!mounted || userId == null) return;
+    if (match.status != 'active' || match.acceptedAt == null) {
+      setState(() => _error = 'Waiting for the challenged player to accept.');
+      return;
+    }
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => NetworkChessScreen(
+          apiClient: widget.apiClient,
+          match: match,
+          currentUserId: userId,
+        ),
+      ),
+    );
+    if (mounted) await _load();
   }
 
   List<RegisteredUser> get _onlinePlayers {
@@ -762,11 +885,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
     if (query.isEmpty) return players;
 
-    return players.where((user) {
-      return user.name.toLowerCase().contains(query) ||
-          user.username.toLowerCase().contains(query) ||
-          user.email.toLowerCase().contains(query);
-    }).toList(growable: false);
+    return players
+        .where((user) {
+          return user.name.toLowerCase().contains(query) ||
+              user.username.toLowerCase().contains(query) ||
+              user.email.toLowerCase().contains(query);
+        })
+        .toList(growable: false);
   }
 
   Future<void> _updatePresence(bool isOnline) async {
@@ -783,6 +908,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _error = null;
       });
       _syncPresenceHeartbeat();
+      _syncChallengePolling();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(updated ? 'You are now online' : 'You are now offline'),
@@ -837,25 +963,50 @@ class ChessActivityScreen extends StatefulWidget {
     required this.subtitle,
     required this.activity,
     required this.initialBoardVariant,
+    this.initialFen,
   });
 
   final String title;
   final String subtitle;
   final ChessActivity activity;
   final int initialBoardVariant;
+  final String? initialFen;
 
   @override
   State<ChessActivityScreen> createState() => _ChessActivityScreenState();
 }
 
 class _ChessActivityScreenState extends State<ChessActivityScreen> {
-  late int _boardVariant = widget.initialBoardVariant;
-  bool _completed = false;
+  late chess.Chess _game;
+  late int _puzzleIndex;
   String _botLevel = 'Beginner';
+  String? _selectedSquare;
+  Set<String> _legalTargets = const {};
+  String? _lastMoveFrom;
+  String? _lastMoveTo;
+  String? _notice;
+  bool _puzzleSolved = false;
+  bool _botThinking = false;
+  Timer? _homeRedirectTimer;
+
+  bool get _isBot => widget.activity == ChessActivity.bots;
+  _PuzzleData get _puzzle => _puzzles[_puzzleIndex % _puzzles.length];
+
+  @override
+  void initState() {
+    super.initState();
+    _puzzleIndex = widget.initialBoardVariant % _puzzles.length;
+    _resetGame(notify: false);
+  }
+
+  @override
+  void dispose() {
+    _homeRedirectTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isBot = widget.activity == ChessActivity.bots;
     return Scaffold(
       backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
@@ -874,24 +1025,12 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
         children: [
           Text(
             widget.subtitle,
-            style: const TextStyle(
-              color: AppColors.mutedText,
-              fontSize: 16,
-            ),
+            style: const TextStyle(color: AppColors.mutedText, fontSize: 16),
           ),
           const SizedBox(height: 18),
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: _ChessBoard(variant: _boardVariant),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          if (isBot) ...[
+          if (_isBot) ...[
             DropdownButtonFormField<String>(
+              key: ValueKey(_botLevel),
               initialValue: _botLevel,
               decoration: InputDecoration(
                 labelText: 'Bot difficulty',
@@ -911,79 +1050,338 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
                 DropdownMenuItem(value: 'Advanced', child: Text('Advanced')),
               ],
               onChanged: (value) {
-                setState(() {
-                  _botLevel = value ?? 'Beginner';
-                  _completed = false;
-                });
+                setState(() => _botLevel = value ?? 'Beginner');
+                _resetGame();
               },
             ),
             const SizedBox(height: 14),
           ],
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: _completed
-                  ? const Color(0xFFE8FFF2)
-                  : Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: _completed
-                    ? const Color(0xFFB7E6C8)
-                    : const Color(0xFFDDE9FF),
+          _GameStatusBar(
+            message: _statusMessage,
+            isPositive: _puzzleSolved || _game.in_checkmate,
+            isThinking: _botThinking,
+          ),
+          const SizedBox(height: 14),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: InteractiveChessBoard(
+                  game: _game,
+                  selectedSquare: _selectedSquare,
+                  legalTargets: _legalTargets,
+                  lastMoveFrom: _lastMoveFrom,
+                  lastMoveTo: _lastMoveTo,
+                  enabled: !_botThinking && !_puzzleSolved && !_game.game_over,
+                  onSquareTap: _handleSquareTap,
+                  onMove: _tryMove,
+                ),
               ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  _completed
-                      ? Icons.check_circle_rounded
-                      : isBot
-                      ? Icons.psychology_alt_rounded
-                      : Icons.lightbulb_outline_rounded,
-                  color: _completed
-                      ? const Color(0xFF16794C)
-                      : AppColors.deepPurple,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _activityMessage(isBot),
-                    style: TextStyle(
-                      color: _completed
-                          ? const Color(0xFF16794C)
-                          : AppColors.heading,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            height: 54,
-            child: FilledButton.icon(
-              key: const Key('chess-activity-action'),
-              onPressed: _handleAction,
-              icon: Icon(
-                _completed ? Icons.refresh_rounded : Icons.play_arrow_rounded,
-              ),
-              label: Text(
-                _completed
-                    ? isBot
-                          ? 'New game'
-                          : 'Next puzzle'
-                    : isBot
-                    ? 'Start vs $_botLevel bot'
-                    : 'Reveal solution',
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF63A83B),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
+          Row(
+            children: [
+              Expanded(
+                child: _BoardControl(
+                  icon: Icons.undo_rounded,
+                  label: 'Undo',
+                  onPressed: _game.getHistory().isEmpty || _botThinking
+                      ? null
+                      : _undo,
                 ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _BoardControl(
+                  icon: Icons.lightbulb_outline_rounded,
+                  label: 'Hint',
+                  onPressed: _isBot ? null : _showHint,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _BoardControl(
+                  icon: Icons.refresh_rounded,
+                  label: _puzzleSolved ? 'Next' : 'Reset',
+                  onPressed: _puzzleSolved ? _nextPuzzle : _resetGame,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _MoveHistory(moves: _game.getHistory().whereType<String>().toList()),
+        ],
+      ),
+    );
+  }
+
+  String get _statusMessage {
+    if (_notice != null) return _notice!;
+    if (_game.in_checkmate) {
+      return _game.turn == chess.Color.WHITE
+          ? 'Checkmate — Black wins'
+          : 'Checkmate — White wins';
+    }
+    if (_game.in_draw) return 'Draw';
+    if (_botThinking) return '$_botLevel bot is thinking…';
+    final side = _game.turn == chess.Color.WHITE ? 'White' : 'Black';
+    return _game.in_check ? '$side is in check' : '$side to move';
+  }
+
+  void _handleSquareTap(String square) {
+    if (_botThinking || _puzzleSolved || _game.game_over) return;
+    if (_isBot && _game.turn == chess.Color.BLACK) return;
+
+    final piece = _game.get(square);
+    if (_selectedSquare != null && _legalTargets.contains(square)) {
+      _tryMove(_selectedSquare!, square);
+      return;
+    }
+
+    if (piece == null || piece.color != _game.turn) {
+      setState(() {
+        _selectedSquare = null;
+        _legalTargets = const {};
+      });
+      return;
+    }
+
+    final moves = _game.moves({'square': square, 'verbose': true});
+    setState(() {
+      _selectedSquare = square;
+      _legalTargets = moves
+          .whereType<Map>()
+          .map((move) => move['to'].toString())
+          .toSet();
+      _notice = null;
+    });
+  }
+
+  void _tryMove(String from, String to) {
+    if (_isBot && _game.turn == chess.Color.BLACK) return;
+    final uci = '$from$to';
+    final moved = _game.move({'from': from, 'to': to, 'promotion': 'q'});
+    if (!moved) return;
+
+    if (!_isBot && uci != _puzzle.solution) {
+      _game.undo();
+      setState(() {
+        _selectedSquare = null;
+        _legalTargets = const {};
+        _notice = 'That move is legal, but it is not the best move. Try again.';
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedSquare = null;
+      _legalTargets = const {};
+      _lastMoveFrom = from;
+      _lastMoveTo = to;
+      _notice = _isBot ? null : 'Correct! ${_puzzle.explanation}';
+      _puzzleSolved = !_isBot;
+    });
+
+    if (_isBot && _game.in_checkmate && _game.turn == chess.Color.BLACK) {
+      _handlePlayerWin();
+    } else if (_isBot && !_game.game_over) {
+      _playBotMove();
+    }
+  }
+
+  Future<void> _playBotMove() async {
+    setState(() => _botThinking = true);
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted || _game.game_over) return;
+
+    final moves = _game.moves({'asObjects': true}).cast<chess.Move>();
+    if (moves.isEmpty) return;
+    final chosen = _chooseBotMove(moves);
+    final from = chosen.fromAlgebraic;
+    final to = chosen.toAlgebraic;
+    _game.move(chosen);
+    if (!mounted) return;
+    setState(() {
+      _lastMoveFrom = from;
+      _lastMoveTo = to;
+      _botThinking = false;
+    });
+  }
+
+  chess.Move _chooseBotMove(List<chess.Move> moves) {
+    if (_botLevel == 'Beginner') {
+      return moves[Random().nextInt(moves.length)];
+    }
+
+    final ranked = List<chess.Move>.from(moves)
+      ..sort((a, b) => _moveScore(b).compareTo(_moveScore(a)));
+    final choicePool = _botLevel == 'Advanced'
+        ? ranked.take(min(2, ranked.length)).toList()
+        : ranked.take(min(5, ranked.length)).toList();
+    return choicePool[Random().nextInt(choicePool.length)];
+  }
+
+  int _moveScore(chess.Move move) {
+    final san = _game.move_to_san(move);
+    if (san.endsWith('#')) return 10000;
+    var score = _pieceValue(move.captured) * 10;
+    if (san.endsWith('+')) score += 8;
+    if ('d4e4d5e5'.contains(move.toAlgebraic)) score += 2;
+    return score;
+  }
+
+  int _pieceValue(chess.PieceType? piece) {
+    if (piece == chess.Chess.QUEEN) return 9;
+    if (piece == chess.Chess.ROOK) return 5;
+    if (piece == chess.Chess.BISHOP || piece == chess.Chess.KNIGHT) return 3;
+    if (piece == chess.Chess.PAWN) return 1;
+    return 0;
+  }
+
+  void _undo() {
+    if (_isBot) _game.undo();
+    _game.undo();
+    setState(() {
+      _selectedSquare = null;
+      _legalTargets = const {};
+      _lastMoveFrom = null;
+      _lastMoveTo = null;
+      _notice = null;
+      _puzzleSolved = false;
+    });
+  }
+
+  void _showHint() {
+    setState(() => _notice = _puzzle.hint);
+  }
+
+  void _nextPuzzle() {
+    _puzzleIndex = (_puzzleIndex + 1) % _puzzles.length;
+    _resetGame();
+  }
+
+  void _resetGame({bool notify = true}) {
+    _game = _isBot
+        ? widget.initialFen == null
+              ? chess.Chess()
+              : chess.Chess.fromFEN(widget.initialFen!)
+        : chess.Chess.fromFEN(_puzzle.fen);
+    _selectedSquare = null;
+    _legalTargets = const {};
+    _lastMoveFrom = null;
+    _lastMoveTo = null;
+    _notice = null;
+    _puzzleSolved = false;
+    _botThinking = false;
+    if (notify && mounted) setState(() {});
+  }
+
+  void _handlePlayerWin() {
+    final upgradedLevel = switch (_botLevel) {
+      'Beginner' => 'Intermediate',
+      'Intermediate' => 'Advanced',
+      _ => 'Advanced',
+    };
+    setState(() => _botLevel = upgradedLevel);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        key: const Key('level-up-toast'),
+        content: const Text(
+          'Congratulation your level is upgrade. Thank you!',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF16794C),
+        duration: const Duration(seconds: 4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    );
+    _homeRedirectTimer?.cancel();
+    _homeRedirectTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+    });
+  }
+}
+
+class _PuzzleData {
+  const _PuzzleData({
+    required this.fen,
+    required this.solution,
+    required this.hint,
+    required this.explanation,
+  });
+
+  final String fen;
+  final String solution;
+  final String hint;
+  final String explanation;
+}
+
+const _puzzles = [
+  _PuzzleData(
+    fen: 'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq g3 0 2',
+    solution: 'd8h4',
+    hint: 'Look for a queen check along the dark diagonal.',
+    explanation: 'Qh4 is checkmate.',
+  ),
+  _PuzzleData(
+    fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4',
+    solution: 'h5f7',
+    hint: 'The f7 pawn is defended only by the king.',
+    explanation: 'Qxf7 is checkmate.',
+  ),
+];
+
+class _GameStatusBar extends StatelessWidget {
+  const _GameStatusBar({
+    required this.message,
+    required this.isPositive,
+    required this.isThinking,
+  });
+
+  final String message;
+  final bool isPositive;
+  final bool isThinking;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: isPositive ? const Color(0xFFE8FFF2) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isPositive ? const Color(0xFFB7E6C8) : const Color(0xFFDDE9FF),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (isThinking)
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            Icon(
+              isPositive ? Icons.check_circle_rounded : Icons.circle,
+              color: isPositive
+                  ? const Color(0xFF16794C)
+                  : const Color(0xFF63A83B),
+              size: 20,
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              key: const Key('game-status'),
+              style: const TextStyle(
+                color: AppColors.heading,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
@@ -991,27 +1389,66 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
       ),
     );
   }
+}
 
-  String _activityMessage(bool isBot) {
-    if (_completed) {
-      return isBot
-          ? 'Practice board started against the $_botLevel bot.'
-          : 'Best move: Qh7+. The king is forced into a mating net.';
-    }
-    return isBot
-        ? 'Choose a level, then start a practice position.'
-        : 'White to move. Look for checks, captures, and threats.';
+class _BoardControl extends StatelessWidget {
+  const _BoardControl({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.tonalIcon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 19),
+      label: Text(label),
+      style: FilledButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
+      ),
+    );
   }
+}
 
-  void _handleAction() {
-    setState(() {
-      if (_completed) {
-        _boardVariant = (_boardVariant + 1) % 4;
-        _completed = false;
-      } else {
-        _completed = true;
-      }
-    });
+class _MoveHistory extends StatelessWidget {
+  const _MoveHistory({required this.moves});
+
+  final List<String> moves;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFDDE9FF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Moves',
+            style: TextStyle(
+              color: AppColors.heading,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            moves.isEmpty ? 'No moves yet' : moves.join('  '),
+            key: const Key('move-history'),
+            style: const TextStyle(color: AppColors.mutedText, height: 1.5),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1078,7 +1515,10 @@ class _ChessHomeHeader extends StatelessWidget {
           const SizedBox(height: 20),
           Row(
             children: [
-              _HomeStat(label: 'Balance', value: '\$${balance.toStringAsFixed(2)}'),
+              _HomeStat(
+                label: 'Balance',
+                value: '\$${balance.toStringAsFixed(2)}',
+              ),
               const SizedBox(width: 8),
               _HomeStat(label: 'Matches', value: '$matches'),
               const SizedBox(width: 8),
@@ -1120,10 +1560,7 @@ class _HomeStat extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               label,
-              style: const TextStyle(
-                color: Color(0xFFAAA6A0),
-                fontSize: 11,
-              ),
+              style: const TextStyle(color: Color(0xFFAAA6A0), fontSize: 11),
             ),
           ],
         ),
@@ -1257,19 +1694,19 @@ class _ChessBoard extends StatelessWidget {
               final row = index ~/ 8;
               final column = index % 8;
               final isLight = (row + column).isEven;
+              final piece = pieces[index];
               return Container(
                 alignment: Alignment.center,
                 color: isLight
                     ? const Color(0xFFF0D9B5)
                     : const Color(0xFF7FA35A),
-                child: Text(
-                  pieces[index] ?? '',
-                  style: TextStyle(
-                    fontSize: squareSize * 0.78,
-                    height: 1,
-                    color: const Color(0xFF1F1D1B),
-                  ),
-                ),
+                child: piece == null
+                    ? null
+                    : ClassicChessPieceIcon(
+                        pieceType: _miniPieceType(piece),
+                        isWhite: _whiteMiniPieces.contains(piece),
+                        size: squareSize * 0.82,
+                      ),
               );
             },
           );
@@ -1279,25 +1716,111 @@ class _ChessBoard extends StatelessWidget {
   }
 }
 
+const _whiteMiniPieces = {
+  '\u2654',
+  '\u2655',
+  '\u2656',
+  '\u2657',
+  '\u2658',
+  '\u2659',
+};
+
+String _miniPieceType(String symbol) {
+  return switch (symbol) {
+    '\u2654' || '\u265A' => 'k',
+    '\u2655' || '\u265B' => 'q',
+    '\u2656' || '\u265C' => 'r',
+    '\u2657' || '\u265D' => 'b',
+    '\u2658' || '\u265E' => 'n',
+    _ => 'p',
+  };
+}
+
 const _boardPieces = <Map<int, String>>[
   {
-    5: '♚', 11: '♟', 14: '♟', 17: '♛', 19: '♟', 23: '♜',
-    26: '♙', 28: '♗', 35: '♘', 46: '♙', 49: '♖', 61: '♔',
+    5: '♚',
+    11: '♟',
+    14: '♟',
+    17: '♛',
+    19: '♟',
+    23: '♜',
+    26: '♙',
+    28: '♗',
+    35: '♘',
+    46: '♙',
+    49: '♖',
+    61: '♔',
   },
   {
-    1: '♚', 4: '♜', 9: '♟', 10: '♟', 18: '♛', 22: '♟',
-    27: '♙', 31: '♙', 36: '♕', 41: '♖', 54: '♙', 58: '♘', 62: '♔',
+    1: '♚',
+    4: '♜',
+    9: '♟',
+    10: '♟',
+    18: '♛',
+    22: '♟',
+    27: '♙',
+    31: '♙',
+    36: '♕',
+    41: '♖',
+    54: '♙',
+    58: '♘',
+    62: '♔',
   },
   {
-    0: '♜', 1: '♞', 2: '♝', 3: '♛', 4: '♚', 5: '♝', 6: '♞', 7: '♜',
-    8: '♟', 9: '♟', 10: '♟', 11: '♟', 12: '♟', 13: '♟', 14: '♟', 15: '♟',
-    48: '♙', 49: '♙', 50: '♙', 51: '♙', 52: '♙', 53: '♙', 54: '♙', 55: '♙',
-    56: '♖', 57: '♘', 58: '♗', 59: '♕', 60: '♔', 61: '♗', 62: '♘', 63: '♖',
+    0: '♜',
+    1: '♞',
+    2: '♝',
+    3: '♛',
+    4: '♚',
+    5: '♝',
+    6: '♞',
+    7: '♜',
+    8: '♟',
+    9: '♟',
+    10: '♟',
+    11: '♟',
+    12: '♟',
+    13: '♟',
+    14: '♟',
+    15: '♟',
+    48: '♙',
+    49: '♙',
+    50: '♙',
+    51: '♙',
+    52: '♙',
+    53: '♙',
+    54: '♙',
+    55: '♙',
+    56: '♖',
+    57: '♘',
+    58: '♗',
+    59: '♕',
+    60: '♔',
+    61: '♗',
+    62: '♘',
+    63: '♖',
   },
   {
-    2: '♜', 4: '♚', 6: '♜', 8: '♟', 9: '♟', 13: '♟', 14: '♟',
-    18: '♞', 20: '♟', 27: '♙', 34: '♗', 36: '♙', 45: '♘',
-    48: '♙', 49: '♙', 53: '♙', 54: '♙', 58: '♖', 60: '♔', 63: '♖',
+    2: '♜',
+    4: '♚',
+    6: '♜',
+    8: '♟',
+    9: '♟',
+    13: '♟',
+    14: '♟',
+    18: '♞',
+    20: '♟',
+    27: '♙',
+    34: '♗',
+    36: '♙',
+    45: '♘',
+    48: '♙',
+    49: '♙',
+    53: '♙',
+    54: '♙',
+    58: '♖',
+    60: '♔',
+    63: '♖',
   },
 ];
 
@@ -1321,9 +1844,7 @@ class _PresencePill extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.only(left: 10, right: 2),
           decoration: BoxDecoration(
-            color: isOnline
-                ? const Color(0xFFE8FFF2)
-                : const Color(0xFFF1F5F9),
+            color: isOnline ? const Color(0xFFE8FFF2) : const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: isOnline
