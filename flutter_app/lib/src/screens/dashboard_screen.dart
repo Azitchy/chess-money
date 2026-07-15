@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_colors.dart';
 import '../dashboard_widgets.dart';
 import '../match_summary.dart';
+import '../registered_user.dart';
 import '../services/api_client.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -26,6 +27,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _error;
   double _balance = 0;
   List<MatchSummary> _history = const [];
+  List<RegisteredUser> _users = const [];
 
   final _fundAmount = TextEditingController();
   final _fundNote = TextEditingController();
@@ -106,6 +108,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(height: 14),
                     const DemoBanner(),
                   ],
+                  const SizedBox(height: 16),
+                  SectionCard(
+                    title: 'Online Players',
+                    icon: Icons.people_alt_outlined,
+                    child: Column(
+                      children: _users.isEmpty
+                          ? const [
+                              Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8),
+                                child: Text('No other players found yet.'),
+                              ),
+                            ]
+                          : _users
+                                .map(
+                                  (user) => PlayerTile(
+                                    user: user,
+                                    onChallenge: widget.demoMode
+                                        ? _demoAction
+                                        : () => _showChallengeDialog(user),
+                                  ),
+                                )
+                                .toList(),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   SectionCard(
                     title: 'Request Wallet Funding',
@@ -270,12 +296,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final balance = await widget.apiClient.getWalletBalance();
       final history = await widget.apiClient.getMatchHistory();
+      final users = await widget.apiClient.getUsers();
       setState(() {
         _balance = balance;
         _history = history
             .whereType<Map<String, dynamic>>()
             .map(MatchSummary.fromJson)
             .toList(growable: false);
+        _users = users;
       });
     } catch (e) {
       setState(() => _error = _friendlyError(e));
@@ -379,6 +407,111 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Demo mode: API action disabled.')),
     );
+  }
+
+  Future<void> _showChallengeDialog(RegisteredUser user) async {
+    final betController = TextEditingController(text: '10');
+    String timeControl = 'blitz';
+
+    try {
+      final shouldCreate = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text('Challenge @${user.username}'),
+            content: StatefulBuilder(
+              builder: (context, setDialogState) {
+                return SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: betController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Bet amount',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: timeControl,
+                        decoration: const InputDecoration(
+                          labelText: 'Time control',
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'bullet',
+                            child: Text('Bullet'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'blitz',
+                            child: Text('Blitz'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'rapid',
+                            child: Text('Rapid'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'classical',
+                            child: Text('Classical'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() {
+                            timeControl = value ?? 'blitz';
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'The challenge will be created as a competitive match and can be joined by the selected player.',
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Send'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldCreate != true) {
+        return;
+      }
+
+      final betAmount = double.parse(betController.text.trim());
+      await widget.apiClient.createMatch(
+        mode: 'competitive',
+        betAmount: betAmount,
+        timeControl: timeControl,
+        opponentId: user.id,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Challenge sent to @${user.username}')),
+      );
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = _friendlyError(e));
+      }
+    } finally {
+      betController.dispose();
+    }
   }
 
   String _friendlyError(Object error) {

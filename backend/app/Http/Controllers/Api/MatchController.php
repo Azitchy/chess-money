@@ -18,6 +18,7 @@ class MatchController extends Controller
             'mode' => ['required', 'in:casual,competitive'],
             'bet_amount' => ['nullable', 'numeric', 'min:0'],
             'time_control' => ['required', 'in:bullet,blitz,rapid,classical'],
+            'opponent_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
         $betAmount = $data['mode'] === 'competitive' ? (float) ($data['bet_amount'] ?? 0) : 0;
@@ -25,8 +26,13 @@ class MatchController extends Controller
             return response()->json(['message' => 'Competitive match requires bet amount'], 422);
         }
 
+        if (($data['opponent_id'] ?? null) === $request->user()->id) {
+            return response()->json(['message' => 'Cannot challenge yourself'], 422);
+        }
+
         $match = MatchGame::create([
             'player_1_id' => $request->user()->id,
+            'challenged_user_id' => $data['opponent_id'] ?? null,
             'mode' => $data['mode'],
             'bet_amount' => $betAmount,
             'time_control' => $data['time_control'],
@@ -44,6 +50,10 @@ class MatchController extends Controller
 
         if ($match->player_1_id === $request->user()->id) {
             return response()->json(['message' => 'Cannot join your own match'], 422);
+        }
+
+        if ($match->challenged_user_id && $match->challenged_user_id !== $request->user()->id) {
+            return response()->json(['message' => 'This challenge was sent to another player'], 422);
         }
 
         DB::transaction(function () use ($match, $request, $walletService) {
@@ -112,6 +122,7 @@ class MatchController extends Controller
         return response()->json(
             MatchGame::where('player_1_id', $request->user()->id)
                 ->orWhere('player_2_id', $request->user()->id)
+                ->orWhere('challenged_user_id', $request->user()->id)
                 ->latest()
                 ->paginate(20)
         );

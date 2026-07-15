@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 import 'match_summary.dart';
+import 'registered_user.dart';
 
 class HeroHeader extends StatelessWidget {
   const HeroHeader({
@@ -464,4 +465,136 @@ class MatchTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class PlayerTile extends StatelessWidget {
+  const PlayerTile({super.key, required this.user, required this.onChallenge});
+
+  final RegisteredUser user;
+  final VoidCallback onChallenge;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FAFF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFDDE9FF)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.blue, AppColors.lavender],
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.person, color: Colors.white, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  user.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.heading,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '@${user.username}',
+                  style: const TextStyle(color: AppColors.mutedText),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _StatusChip(
+                      label: user.isOnline ? 'Online' : 'Offline',
+                      background: user.isOnline
+                          ? const Color(0xFFE8FFF2)
+                          : const Color(0xFFF1F5F9),
+                      foreground: user.isOnline
+                          ? const Color(0xFF16794C)
+                          : const Color(0xFF475569),
+                    ),
+                    if (user.lastSeenAt != null)
+                      _StatusChip(
+                        label: 'Seen ${_relativeTime(user.lastSeenAt!)}',
+                        background: const Color(0xFFEFF6FF),
+                        foreground: const Color(0xFF355C9A),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          FilledButton(
+            onPressed: onChallenge,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.deepPurple,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: const Text(
+              'Challenge',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({
+    required this.label,
+    required this.background,
+    required this.foreground,
+  });
+
+  final String label;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: foreground,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+String _relativeTime(DateTime dateTime) {
+  final diff = DateTime.now().difference(dateTime);
+  if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  return '${diff.inDays}d ago';
 }

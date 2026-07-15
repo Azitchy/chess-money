@@ -23,6 +23,7 @@ class AuthController extends Controller
         $user = User::create($data);
         $plainToken = Str::random(60);
         $user->api_token = hash('sha256', $plainToken);
+        $user->last_seen_at = now();
         $user->save();
 
         return response()->json(['token' => $plainToken, 'user' => $user], 201);
@@ -49,6 +50,7 @@ class AuthController extends Controller
 
         $plainToken = Str::random(60);
         $user->api_token = hash('sha256', $plainToken);
+        $user->last_seen_at = now();
         $user->save();
 
         return response()->json(['token' => $plainToken, 'user' => $user]);

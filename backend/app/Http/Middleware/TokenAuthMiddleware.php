@@ -23,6 +23,7 @@ class TokenAuthMiddleware
             return response()->json(['message' => 'Unauthenticated'], 401);
         }
 
+        $user->forceFill(['last_seen_at' => now()])->saveQuietly();
         auth()->setUser($user);
 
         return $next($request);

@@ -20,6 +20,7 @@ class User extends Authenticatable
         'wallet_balance',
         'is_admin',
         'is_active',
+        'last_seen_at',
         'api_token',
     ];
 
@@ -37,6 +38,7 @@ class User extends Authenticatable
             'wallet_balance' => 'decimal:2',
             'is_admin' => 'boolean',
             'is_active' => 'boolean',
+            'last_seen_at' => 'datetime',
         ];
     }
 

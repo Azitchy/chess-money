@@ -10,6 +10,7 @@ class MatchGame extends Model
 
     protected $fillable = [
         'player_1_id',
+        'challenged_user_id',
         'player_2_id',
         'winner_id',
         'bet_amount',

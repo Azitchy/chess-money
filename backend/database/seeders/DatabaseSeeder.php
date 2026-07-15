@@ -30,7 +30,36 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        $testUserOne = User::updateOrCreate(
+            ['email' => 'test1@g.com'],
+            [
+                'name' => 'Paris Bartoletti',
+                'username' => 'test1',
+                'phone_number' => null,
+                'password' => 'Test@12345',
+                'wallet_balance' => 0.58,
+                'is_admin' => false,
+                'is_active' => true,
+                'last_seen_at' => now(),
+            ]
+        );
+
+        $testUserTwo = User::updateOrCreate(
+            ['email' => 'test2@g.com'],
+            [
+                'name' => 'Miss Iliana Harne DVM',
+                'username' => 'test2',
+                'phone_number' => null,
+                'password' => 'Test@12345',
+                'wallet_balance' => 35.69,
+                'is_admin' => false,
+                'is_active' => true,
+                'last_seen_at' => now(),
+            ]
+        );
+
         $players = User::factory(30)->create();
+        $players = $players->merge([$testUserOne, $testUserTwo])->values();
 
         foreach ($players as $player) {
             WalletTransaction::create([
