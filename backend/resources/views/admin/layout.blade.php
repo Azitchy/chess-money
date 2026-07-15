@@ -59,8 +59,28 @@
     .btn{background:#2563eb;color:#fff;border:none;border-radius:7px;padding:8px 11px;cursor:pointer}
     .btn-danger{background:#dc2626}
     .btn-secondary{background:#475569}
-    input,select{width:100%;padding:10px 11px;margin:6px 0 12px;border:1px solid #ccd6e2;border-radius:8px}
+    .btn-success{background:#15803d}
+    .btn-warning{background:#d97706}
+    input,select,textarea{width:100%;padding:10px 11px;margin:6px 0 12px;border:1px solid #ccd6e2;border-radius:8px;font:inherit;background:#fff}
+    textarea{resize:vertical}
+    small{color:var(--muted)}
     form.inline{display:inline}
+    .header-actions,.actions,.form-actions,.form-summary{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .header-actions{justify-content:flex-end}
+    .actions{min-width:300px}
+    .table-wrap{overflow-x:auto}
+    .toolbar{display:grid;grid-template-columns:minmax(220px,420px) auto auto 1fr;gap:8px;align-items:center;margin-bottom:14px}
+    .toolbar input{margin:0}
+    .form-card{max-width:920px}
+    .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 18px}
+    .form-grid label{font-size:14px;font-weight:600}
+    .field-full{grid-column:1 / -1}
+    .check-field{display:flex;flex-direction:column}
+    .check-row{min-height:43px;display:flex;align-items:center;gap:8px;font-weight:400}
+    .check-row input{width:auto;margin:0}
+    .form-actions{margin-top:12px;padding-top:16px;border-top:1px solid var(--line)}
+    .form-summary{background:#f8fbff;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:18px}
+    .form-summary span{color:var(--muted);font-size:13px}
     nav[role="navigation"]{margin-top:14px}
     nav[role="navigation"] > div:first-child{display:none}
     nav[role="navigation"] > div:last-child{display:flex;justify-content:center}
@@ -92,7 +112,7 @@
     .login-foot{position:absolute;left:0;right:0;bottom:30px;text-align:center;color:#c7cde6}
     .login-foot a{color:#c7cde6}
     @media (max-width:1080px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.two-col{grid-template-columns:1fr}}
-    @media (max-width:860px){.sidebar{display:none}.content{padding:14px}.topbar{padding:0 12px}.stats-grid{grid-template-columns:1fr}.content-header h1{font-size:22px}.login-card{padding:42px 24px;min-height:540px}.welcome{font-size:40px}}
+    @media (max-width:860px){.sidebar{display:none}.content{padding:14px}.topbar{padding:0 12px}.stats-grid{grid-template-columns:1fr}.content-header h1{font-size:22px}.login-card{padding:42px 24px;min-height:540px}.welcome{font-size:40px}.form-grid{grid-template-columns:1fr}.field-full{grid-column:auto}.toolbar{grid-template-columns:1fr auto}.header-actions{align-items:flex-end;flex-direction:column}.content-header{align-items:flex-start}}
   </style>
   @yield('head')
 </head>

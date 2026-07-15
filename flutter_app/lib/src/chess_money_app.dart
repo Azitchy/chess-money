@@ -21,7 +21,6 @@ class ChessMoneyApp extends StatefulWidget {
 
 class _ChessMoneyAppState extends State<ChessMoneyApp> {
   late bool _isAuthenticated;
-  bool _demoMode = false;
 
   @override
   void initState() {
@@ -43,33 +42,19 @@ class _ChessMoneyAppState extends State<ChessMoneyApp> {
           ? DashboardScreen(
               apiClient: widget.apiClient,
               onLogout: _handleLogout,
-              demoMode: _demoMode,
             )
-          : LoginScreen(
-              apiClient: widget.apiClient,
-              onLogin: _handleLogin,
-              onBypassLogin: _handleBypassLogin,
-            ),
+          : LoginScreen(apiClient: widget.apiClient, onLogin: _handleLogin),
     );
   }
 
   void _handleLogin() {
     setState(() {
-      _demoMode = false;
-      _isAuthenticated = true;
-    });
-  }
-
-  void _handleBypassLogin() {
-    setState(() {
-      _demoMode = true;
       _isAuthenticated = true;
     });
   }
 
   void _handleLogout() {
     setState(() {
-      _demoMode = false;
       _isAuthenticated = false;
     });
   }

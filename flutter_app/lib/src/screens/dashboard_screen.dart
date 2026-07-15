@@ -1085,7 +1085,7 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
         surfaceTintColor: Colors.white,
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(6, 8, 6, 18),
+        padding: const EdgeInsets.fromLTRB(2, 8, 2, 18),
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -1228,7 +1228,7 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
           ],
           Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
+              constraints: const BoxConstraints(maxWidth: 840),
               child: AspectRatio(
                 aspectRatio: 1,
                 child: InteractiveChessBoard(

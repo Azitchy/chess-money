@@ -85,7 +85,7 @@ class InteractiveChessBoard extends StatelessWidget {
 
                     Widget pieceWidget = piece == null
                         ? const SizedBox.shrink()
-                        : _ChessPiece(piece: piece, size: squareSize * 0.84);
+                        : _ChessPiece(piece: piece, size: squareSize * 0.90);
                     if (piece != null && canDrag) {
                       pieceWidget = Draggable<String>(
                         data: square,
@@ -94,7 +94,7 @@ class InteractiveChessBoard extends StatelessWidget {
                           color: Colors.transparent,
                           child: _ChessPiece(
                             piece: piece,
-                            size: squareSize * 0.94,
+                            size: squareSize * 0.98,
                             shadow: true,
                           ),
                         ),
@@ -297,7 +297,7 @@ class ClassicChessPieceIcon extends StatelessWidget {
         dimension: size,
         child: Transform(
           alignment: Alignment.bottomCenter,
-          transform: Matrix4.diagonal3Values(shadow ? 1.52 : 1.42, 1, 1),
+          transform: Matrix4.diagonal3Values(shadow ? 1.56 : 1.46, 1, 1),
           child: Padding(
             padding: EdgeInsets.only(top: size * 0.015, bottom: size * 0.025),
             child: image,

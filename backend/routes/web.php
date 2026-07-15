@@ -16,6 +16,11 @@ Route::get('/login', fn () => redirect()->route('admin.login'))->name('login');
 Route::middleware(['auth', 'admin.web'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
     Route::get('/users', [AdminDashboardController::class, 'users'])->name('admin.users');
+    Route::get('/users/create', [AdminDashboardController::class, 'createUser'])->name('admin.users.create');
+    Route::post('/users', [AdminDashboardController::class, 'storeUser'])->name('admin.users.store');
+    Route::get('/users/{user}/edit', [AdminDashboardController::class, 'editUser'])->name('admin.users.edit');
+    Route::put('/users/{user}', [AdminDashboardController::class, 'updateUser'])->name('admin.users.update');
+    Route::delete('/users/{user}', [AdminDashboardController::class, 'deleteUser'])->name('admin.users.delete');
     Route::post('/users/{user}/toggle-status', [AdminDashboardController::class, 'toggleUserStatus'])->name('admin.users.toggle-status');
     Route::get('/users/{user}/wallet', [AdminDashboardController::class, 'walletForm'])->name('admin.users.wallet.form');
     Route::post('/users/{user}/wallet', [AdminDashboardController::class, 'walletAdjust'])->name('admin.users.wallet.adjust');

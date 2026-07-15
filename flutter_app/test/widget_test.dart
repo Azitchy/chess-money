@@ -13,6 +13,7 @@ import 'package:flutter_app/src/match_summary.dart';
 import 'package:flutter_app/src/player_progress.dart';
 import 'package:flutter_app/src/registered_user.dart';
 import 'package:flutter_app/src/screens/dashboard_screen.dart';
+import 'package:flutter_app/src/screens/login_screen.dart';
 import 'package:flutter_app/src/screens/profile_screen.dart';
 import 'package:flutter_app/src/services/api_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -67,6 +68,25 @@ void main() {
     expect(progress.rating, 1);
     expect(progress.level, 1);
     expect(progress.awarded, isTrue);
+  });
+
+  testWidgets('login hides backend, quick accounts, and demo access', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final apiClient = await ApiClient.create();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginScreen(apiClient: apiClient, onLogin: () {}),
+      ),
+    );
+
+    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('Backend URL'), findsNothing);
+    expect(find.text('Save API address'), findsNothing);
+    expect(find.text('Quick login accounts'), findsNothing);
+    expect(find.text('Skip login for demo'), findsNothing);
   });
 
   testWidgets('chess pieces use responsive white and black PNG assets', (
