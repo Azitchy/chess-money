@@ -1,7 +1,11 @@
+import 'dart:math';
+
+import 'package:chess/chess.dart' as chess;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_app/src/dashboard_widgets.dart';
+import 'package:flutter_app/src/bot_move_engine.dart';
 import 'package:flutter_app/src/interactive_chess_board.dart';
 import 'package:flutter_app/src/live_match.dart';
 import 'package:flutter_app/src/match_summary.dart';
@@ -82,6 +86,29 @@ void main() {
       Colors.white,
       Colors.black,
     ]);
+  });
+
+  test('bot difficulty profiles increase search strength', () {
+    expect(ChessBotEngine.profileFor('Beginner').searchDepth, 0);
+    expect(ChessBotEngine.profileFor('Intermediate').searchDepth, 2);
+    expect(ChessBotEngine.profileFor('Advanced').searchDepth, 3);
+    expect(
+      ChessBotEngine.profileFor('Beginner').candidatePool,
+      greaterThan(ChessBotEngine.profileFor('Intermediate').candidatePool),
+    );
+    expect(ChessBotEngine.profileFor('Advanced').candidatePool, 1);
+  });
+
+  test('advanced bot finds a forced checkmate in one', () {
+    final game = chess.Chess.fromFEN('8/8/8/8/8/5kq1/8/7K b - - 0 1');
+    final engine = ChessBotEngine(random: Random(1));
+
+    final move = engine.chooseMove(game, 'Advanced');
+    game.move(move);
+
+    expect(move.fromAlgebraic, 'g3');
+    expect(move.toAlgebraic, 'g2');
+    expect(game.in_checkmate, isTrue);
   });
 
   testWidgets('online player tile shows avatar, status, and challenge action', (

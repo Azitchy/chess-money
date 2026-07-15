@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:chess/chess.dart' as chess;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_colors.dart';
+import '../bot_move_engine.dart';
 import '../dashboard_widgets.dart';
 import '../interactive_chess_board.dart';
 import '../live_match.dart';
@@ -988,6 +988,7 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
   bool _puzzleSolved = false;
   bool _botThinking = false;
   Timer? _homeRedirectTimer;
+  final ChessBotEngine _botEngine = ChessBotEngine();
 
   bool get _isBot => widget.activity == ChessActivity.bots;
   _PuzzleData get _puzzle => _puzzles[_puzzleIndex % _puzzles.length];
@@ -1053,6 +1054,18 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
                 setState(() => _botLevel = value ?? 'Beginner');
                 _resetGame();
               },
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                ChessBotEngine.profileFor(_botLevel).description,
+                key: const Key('bot-difficulty-description'),
+                style: const TextStyle(
+                  color: AppColors.mutedText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
             const SizedBox(height: 14),
           ],
@@ -1193,12 +1206,24 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
 
   Future<void> _playBotMove() async {
     setState(() => _botThinking = true);
-    await Future<void>.delayed(const Duration(milliseconds: 450));
-    if (!mounted || _game.game_over) return;
+    final thinkingTime = switch (_botLevel) {
+      'Advanced' => const Duration(milliseconds: 650),
+      'Intermediate' => const Duration(milliseconds: 450),
+      _ => const Duration(milliseconds: 250),
+    };
+    await Future<void>.delayed(thinkingTime);
+    if (!mounted) return;
+    if (_game.game_over) {
+      setState(() => _botThinking = false);
+      return;
+    }
 
     final moves = _game.moves({'asObjects': true}).cast<chess.Move>();
-    if (moves.isEmpty) return;
-    final chosen = _chooseBotMove(moves);
+    if (moves.isEmpty) {
+      setState(() => _botThinking = false);
+      return;
+    }
+    final chosen = _botEngine.chooseMove(_game, _botLevel);
     final from = chosen.fromAlgebraic;
     final to = chosen.toAlgebraic;
     _game.move(chosen);
@@ -1208,36 +1233,6 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
       _lastMoveTo = to;
       _botThinking = false;
     });
-  }
-
-  chess.Move _chooseBotMove(List<chess.Move> moves) {
-    if (_botLevel == 'Beginner') {
-      return moves[Random().nextInt(moves.length)];
-    }
-
-    final ranked = List<chess.Move>.from(moves)
-      ..sort((a, b) => _moveScore(b).compareTo(_moveScore(a)));
-    final choicePool = _botLevel == 'Advanced'
-        ? ranked.take(min(2, ranked.length)).toList()
-        : ranked.take(min(5, ranked.length)).toList();
-    return choicePool[Random().nextInt(choicePool.length)];
-  }
-
-  int _moveScore(chess.Move move) {
-    final san = _game.move_to_san(move);
-    if (san.endsWith('#')) return 10000;
-    var score = _pieceValue(move.captured) * 10;
-    if (san.endsWith('+')) score += 8;
-    if ('d4e4d5e5'.contains(move.toAlgebraic)) score += 2;
-    return score;
-  }
-
-  int _pieceValue(chess.PieceType? piece) {
-    if (piece == chess.Chess.QUEEN) return 9;
-    if (piece == chess.Chess.ROOK) return 5;
-    if (piece == chess.Chess.BISHOP || piece == chess.Chess.KNIGHT) return 3;
-    if (piece == chess.Chess.PAWN) return 1;
-    return 0;
   }
 
   void _undo() {
