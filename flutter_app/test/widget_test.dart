@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_app/src/dashboard_widgets.dart';
 import 'package:flutter_app/src/bot_move_engine.dart';
+import 'package:flutter_app/src/chess_puzzle.dart';
 import 'package:flutter_app/src/interactive_chess_board.dart';
 import 'package:flutter_app/src/live_match.dart';
 import 'package:flutter_app/src/match_summary.dart';
@@ -109,6 +110,55 @@ void main() {
     expect(move.fromAlgebraic, 'g3');
     expect(move.toAlgebraic, 'g2');
     expect(game.in_checkmate, isTrue);
+  });
+
+  test('every puzzle solution line contains legal chess moves', () {
+    for (final puzzle in chessPuzzles) {
+      final game = chess.Chess.fromFEN(puzzle.fen);
+      for (final uci in puzzle.solutionLine) {
+        final moved = game.move({
+          'from': uci.substring(0, 2),
+          'to': uci.substring(2, 4),
+          'promotion': 'q',
+        });
+        expect(moved, isTrue, reason: '${puzzle.id}: $uci must be legal');
+      }
+    }
+  });
+
+  test('daily puzzle is stable while random puzzles avoid repetition', () {
+    final today = DateTime.utc(2026, 7, 15);
+    expect(dailyPuzzleIndex(today), dailyPuzzleIndex(today));
+    expect(
+      dailyPuzzleIndex(today.add(const Duration(days: 1))),
+      isNot(dailyPuzzleIndex(today)),
+    );
+    expect(randomPuzzleIndex(Random(2), excluding: 3), isNot(3));
+    expect(dailyChessPuzzle(today).fen, dailyChessPuzzle(today).fen);
+    expect(
+      dailyChessPuzzle(today.add(const Duration(days: 1))).id,
+      isNot(dailyChessPuzzle(today).id),
+    );
+  });
+
+  test('procedural puzzle generator creates endless legal lessons', () {
+    final positions = <String>{};
+    for (var seed = 0; seed < 30; seed++) {
+      final puzzle = generateRandomChessLesson(Random(seed));
+      positions.add(puzzle.fen);
+      final uci = puzzle.solutionLine.first;
+      final game = chess.Chess.fromFEN(puzzle.fen);
+      expect(
+        game.move({
+          'from': uci.substring(0, 2),
+          'to': uci.substring(2, 4),
+          'promotion': 'q',
+        }),
+        isTrue,
+        reason: 'Generated lesson $seed must contain a legal solution.',
+      );
+    }
+    expect(positions.length, greaterThan(25));
   });
 
   testWidgets('online player tile shows avatar, status, and challenge action', (
@@ -257,6 +307,7 @@ void main() {
           subtitle: 'Find the strongest move.',
           activity: ChessActivity.puzzles,
           initialBoardVariant: 0,
+          randomizePuzzles: false,
         ),
       ),
     );
@@ -266,8 +317,87 @@ void main() {
     await tester.tap(find.byKey(const Key('square-h4')));
     await tester.pump();
 
-    expect(find.text('Correct! Qh4 is checkmate.'), findsOneWidget);
+    expect(find.textContaining('Correct! Qh4 is checkmate'), findsOneWidget);
     expect(find.textContaining('Qh4#'), findsOneWidget);
+  });
+
+  testWidgets('multi-move puzzle plays a reply and asks for continuation', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ChessActivityScreen(
+          title: 'Solve Puzzles',
+          subtitle: 'Find the opening plan.',
+          activity: ChessActivity.puzzles,
+          initialBoardVariant: 6,
+          randomizePuzzles: false,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('square-e2')));
+    await tester.tap(find.byKey(const Key('square-e4')));
+    await tester.pump();
+    expect(find.text('Opponent is responding…'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(
+      find.text('Opponent replied. Find the next best move.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('square-g1')));
+    await tester.tap(find.byKey(const Key('square-f3')));
+    await tester.pump();
+    expect(
+      find.textContaining('Correct! e4 claims the center'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('daily puzzle shows its date and tomorrow unlock message', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final now = DateTime.now();
+    final solution = dailyChessPuzzle(now).solutionLine.first;
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ChessActivityScreen(
+          title: 'Daily Puzzle',
+          subtitle: 'Today\'s challenge.',
+          activity: ChessActivity.dailyPuzzle,
+          initialBoardVariant: 0,
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.textContaining('${now.year}'), findsOneWidget);
+
+    await tester.tap(find.byKey(Key('square-${solution.substring(0, 2)}')));
+    await tester.tap(find.byKey(Key('square-${solution.substring(2, 4)}')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('daily-puzzle-complete-toast')),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('A new puzzle will unlock tomorrow'),
+      findsOneWidget,
+    );
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('daily_puzzle_completed_date'), isNotNull);
   });
 
   testWidgets('bot board makes a reply after the player moves', (tester) async {

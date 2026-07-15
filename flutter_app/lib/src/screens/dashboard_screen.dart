@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:chess/chess.dart' as chess;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_colors.dart';
 import '../bot_move_engine.dart';
+import '../chess_puzzle.dart';
 import '../dashboard_widgets.dart';
 import '../interactive_chess_board.dart';
 import '../live_match.dart';
@@ -957,6 +960,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 enum ChessActivity { puzzles, dailyPuzzle, bots }
 
+const _dailyPuzzleCompletionKey = 'daily_puzzle_completed_date';
+const _monthNames = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+String _formatPuzzleDate(DateTime date) =>
+    '${_monthNames[date.month - 1]} ${date.day}, ${date.year}';
+
+String _dailyDateStorageValue(DateTime date) =>
+    '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
 class ChessActivityScreen extends StatefulWidget {
   const ChessActivityScreen({
     super.key,
@@ -965,6 +990,7 @@ class ChessActivityScreen extends StatefulWidget {
     required this.activity,
     required this.initialBoardVariant,
     this.initialFen,
+    this.randomizePuzzles = true,
   });
 
   final String title;
@@ -972,6 +998,7 @@ class ChessActivityScreen extends StatefulWidget {
   final ChessActivity activity;
   final int initialBoardVariant;
   final String? initialFen;
+  final bool randomizePuzzles;
 
   @override
   State<ChessActivityScreen> createState() => _ChessActivityScreenState();
@@ -980,6 +1007,8 @@ class ChessActivityScreen extends StatefulWidget {
 class _ChessActivityScreenState extends State<ChessActivityScreen> {
   late chess.Chess _game;
   late int _puzzleIndex;
+  ChessPuzzle? _generatedPuzzle;
+  late final DateTime _dailyDate;
   String _botLevel = 'Beginner';
   String? _selectedSquare;
   Set<String> _legalTargets = const {};
@@ -988,22 +1017,36 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
   String? _notice;
   bool _puzzleSolved = false;
   bool _botThinking = false;
+  bool _puzzleReplying = false;
+  int _solutionStep = 0;
   Timer? _homeRedirectTimer;
+  Timer? _puzzleReplyTimer;
   final ChessBotEngine _botEngine = ChessBotEngine();
+  final Random _puzzleRandom = Random();
 
   bool get _isBot => widget.activity == ChessActivity.bots;
-  _PuzzleData get _puzzle => _puzzles[_puzzleIndex % _puzzles.length];
+  ChessPuzzle get _puzzle =>
+      _generatedPuzzle ?? chessPuzzles[_puzzleIndex % chessPuzzles.length];
 
   @override
   void initState() {
     super.initState();
-    _puzzleIndex = widget.initialBoardVariant % _puzzles.length;
+    _dailyDate = DateTime.now();
+    _puzzleIndex = widget.initialBoardVariant % chessPuzzles.length;
+    if (widget.activity == ChessActivity.dailyPuzzle) {
+      _generatedPuzzle = dailyChessPuzzle(_dailyDate);
+      unawaited(_loadDailyCompletion());
+    } else if (widget.activity == ChessActivity.puzzles &&
+        widget.randomizePuzzles) {
+      _generatedPuzzle = generateRandomChessLesson(_puzzleRandom);
+    }
     _resetGame(notify: false);
   }
 
   @override
   void dispose() {
     _homeRedirectTimer?.cancel();
+    _puzzleReplyTimer?.cancel();
     super.dispose();
   }
 
@@ -1104,6 +1147,38 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
             ),
           ),
           const SizedBox(height: 7),
+          if (!_isBot) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Row(
+                children: [
+                  _PuzzleChip(
+                    icon: Icons.lightbulb_rounded,
+                    label: _puzzle.theme,
+                  ),
+                  const SizedBox(width: 6),
+                  _PuzzleChip(
+                    icon: Icons.signal_cellular_alt_rounded,
+                    label: _puzzle.difficulty,
+                  ),
+                  const Spacer(),
+                  Text(
+                    widget.activity == ChessActivity.dailyPuzzle
+                        ? _formatPuzzleDate(_dailyDate)
+                        : widget.randomizePuzzles
+                        ? 'Endless random'
+                        : '${_puzzleIndex + 1}/${chessPuzzles.length}',
+                    style: const TextStyle(
+                      color: AppColors.mutedText,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
           Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 720),
@@ -1115,7 +1190,11 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
                   legalTargets: _legalTargets,
                   lastMoveFrom: _lastMoveFrom,
                   lastMoveTo: _lastMoveTo,
-                  enabled: !_botThinking && !_puzzleSolved && !_game.game_over,
+                  enabled:
+                      !_botThinking &&
+                      !_puzzleReplying &&
+                      !_puzzleSolved &&
+                      !_game.game_over,
                   onSquareTap: _handleSquareTap,
                   onMove: _tryMove,
                 ),
@@ -1129,7 +1208,8 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
                 child: _BoardControl(
                   icon: Icons.undo_rounded,
                   label: 'Undo',
-                  onPressed: _game.getHistory().isEmpty || _botThinking
+                  onPressed:
+                      !_isBot || _game.getHistory().isEmpty || _botThinking
                       ? null
                       : _undo,
                 ),
@@ -1146,8 +1226,16 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
               Expanded(
                 child: _BoardControl(
                   icon: Icons.refresh_rounded,
-                  label: _puzzleSolved ? 'Next' : 'Reset',
-                  onPressed: _puzzleSolved ? _nextPuzzle : _resetGame,
+                  label: _puzzleSolved
+                      ? widget.activity == ChessActivity.dailyPuzzle
+                            ? 'Done'
+                            : 'Random'
+                      : 'Reset',
+                  onPressed: _puzzleSolved
+                      ? widget.activity == ChessActivity.dailyPuzzle
+                            ? () => Navigator.of(context).pop()
+                            : _nextPuzzle
+                      : _resetGame,
                 ),
               ),
             ],
@@ -1160,6 +1248,7 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
   }
 
   String get _statusMessage {
+    if (_puzzleReplying) return 'Opponent is responding…';
     if (_notice != null) return _notice!;
     if (_game.in_checkmate) {
       return _game.turn == chess.Color.WHITE
@@ -1173,7 +1262,9 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
   }
 
   void _handleSquareTap(String square) {
-    if (_botThinking || _puzzleSolved || _game.game_over) return;
+    if (_botThinking || _puzzleReplying || _puzzleSolved || _game.game_over) {
+      return;
+    }
     if (_isBot && _game.turn == chess.Color.BLACK) return;
 
     final piece = _game.get(square);
@@ -1207,7 +1298,7 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
     final moved = _game.move({'from': from, 'to': to, 'promotion': 'q'});
     if (!moved) return;
 
-    if (!_isBot && uci != _puzzle.solution) {
+    if (!_isBot && uci != _puzzle.solutionLine[_solutionStep]) {
       _game.undo();
       setState(() {
         _selectedSquare = null;
@@ -1217,16 +1308,30 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
       return;
     }
 
+    final puzzleMoveCompleted = !_isBot;
+    if (puzzleMoveCompleted) _solutionStep++;
+    final solved =
+        puzzleMoveCompleted && _solutionStep >= _puzzle.solutionLine.length;
     setState(() {
       _selectedSquare = null;
       _legalTargets = const {};
       _lastMoveFrom = from;
       _lastMoveTo = to;
-      _notice = _isBot ? null : 'Correct! ${_puzzle.explanation}';
-      _puzzleSolved = !_isBot;
+      _notice = _isBot
+          ? null
+          : solved
+          ? 'Correct! ${_puzzle.explanation}'
+          : 'Good move. Watch the reply…';
+      _puzzleSolved = solved;
     });
 
-    if (_isBot && _game.in_checkmate && _game.turn == chess.Color.BLACK) {
+    if (!_isBot && !solved) {
+      _playPuzzleReply();
+    } else if (solved && widget.activity == ChessActivity.dailyPuzzle) {
+      unawaited(_completeDailyPuzzle());
+    } else if (_isBot &&
+        _game.in_checkmate &&
+        _game.turn == chess.Color.BLACK) {
       _handlePlayerWin();
     } else if (_isBot && !_game.game_over) {
       _playBotMove();
@@ -1282,8 +1387,78 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
   }
 
   void _nextPuzzle() {
-    _puzzleIndex = (_puzzleIndex + 1) % _puzzles.length;
+    if (widget.randomizePuzzles) {
+      final previousFen = _puzzle.fen;
+      do {
+        _generatedPuzzle = generateRandomChessLesson(_puzzleRandom);
+      } while (_generatedPuzzle!.fen == previousFen);
+    } else {
+      _puzzleIndex = randomPuzzleIndex(_puzzleRandom, excluding: _puzzleIndex);
+    }
     _resetGame();
+  }
+
+  Future<void> _loadDailyCompletion() async {
+    final preferences = await SharedPreferences.getInstance();
+    if (!mounted ||
+        preferences.getString(_dailyPuzzleCompletionKey) !=
+            _dailyDateStorageValue(_dailyDate)) {
+      return;
+    }
+    setState(() {
+      _puzzleSolved = true;
+      _notice =
+          'Completed for ${_formatPuzzleDate(_dailyDate)}. A new Daily Puzzle unlocks tomorrow.';
+    });
+  }
+
+  Future<void> _completeDailyPuzzle() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(
+      _dailyPuzzleCompletionKey,
+      _dailyDateStorageValue(_dailyDate),
+    );
+    if (!mounted) return;
+    final tomorrow = _dailyDate.add(const Duration(days: 1));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        key: const Key('daily-puzzle-complete-toast'),
+        content: Text(
+          'Daily Puzzle completed for ${_formatPuzzleDate(_dailyDate)}. '
+          'A new puzzle will unlock tomorrow, ${_formatPuzzleDate(tomorrow)}.',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        backgroundColor: const Color(0xFF16794C),
+      ),
+    );
+  }
+
+  void _playPuzzleReply() {
+    _puzzleReplyTimer?.cancel();
+    setState(() => _puzzleReplying = true);
+    _puzzleReplyTimer = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted || _solutionStep >= _puzzle.solutionLine.length) return;
+      final response = _puzzle.solutionLine[_solutionStep];
+      final from = response.substring(0, 2);
+      final to = response.substring(2, 4);
+      final moved = _game.move({'from': from, 'to': to, 'promotion': 'q'});
+      if (!moved) {
+        setState(() {
+          _puzzleReplying = false;
+          _notice = 'This puzzle could not continue. Try another puzzle.';
+        });
+        return;
+      }
+      _solutionStep++;
+      setState(() {
+        _lastMoveFrom = from;
+        _lastMoveTo = to;
+        _puzzleReplying = false;
+        _notice = 'Opponent replied. Find the next best move.';
+      });
+    });
   }
 
   void _resetGame({bool notify = true}) {
@@ -1298,6 +1473,9 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
     _lastMoveTo = null;
     _notice = null;
     _puzzleSolved = false;
+    _puzzleReplying = false;
+    _solutionStep = 0;
+    _puzzleReplyTimer?.cancel();
     _botThinking = false;
     if (notify && mounted) setState(() {});
   }
@@ -1331,34 +1509,38 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
   }
 }
 
-class _PuzzleData {
-  const _PuzzleData({
-    required this.fen,
-    required this.solution,
-    required this.hint,
-    required this.explanation,
-  });
+class _PuzzleChip extends StatelessWidget {
+  const _PuzzleChip({required this.icon, required this.label});
 
-  final String fen;
-  final String solution;
-  final String hint;
-  final String explanation;
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF2FF),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: AppColors.deepPurple),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.deepPurple,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
-
-const _puzzles = [
-  _PuzzleData(
-    fen: 'rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq g3 0 2',
-    solution: 'd8h4',
-    hint: 'Look for a queen check along the dark diagonal.',
-    explanation: 'Qh4 is checkmate.',
-  ),
-  _PuzzleData(
-    fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4',
-    solution: 'h5f7',
-    hint: 'The f7 pawn is defended only by the king.',
-    explanation: 'Qxf7 is checkmate.',
-  ),
-];
 
 class _GameStatusBar extends StatelessWidget {
   const _GameStatusBar({
