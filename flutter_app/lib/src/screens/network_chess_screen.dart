@@ -69,54 +69,65 @@ class _NetworkChessScreenState extends State<NetworkChessScreen> {
     return Scaffold(
       backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
+        toolbarHeight: 52,
         title: Text('Match #${_match.id}'),
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(6, 7, 6, 14),
           children: [
-            Row(
-              children: [
-                const CircleAvatar(child: Icon(Icons.person)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _opponentName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Row(
+                children: [
+                  const CircleAvatar(
+                    radius: 17,
+                    child: Icon(Icons.person, size: 20),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _opponentName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
                         ),
+                        Text(
+                          '${_match.timeControl.toUpperCase()} • Stake ${_match.betAmount.toStringAsFixed(2)}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _myTurn
+                          ? const Color(0xFFDDF8E8)
+                          : const Color(0xFFE9EEF7),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _myTurn ? 'Your turn' : 'Waiting',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                       ),
-                      Text(
-                        '${_match.timeControl.toUpperCase()} • Stake ${_match.betAmount.toStringAsFixed(2)}',
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _myTurn
-                        ? const Color(0xFFDDF8E8)
-                        : const Color(0xFFE9EEF7),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _myTurn ? 'Your turn' : 'Waiting',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 7),
             AspectRatio(
               aspectRatio: 1,
               child: InteractiveChessBoard(
@@ -130,7 +141,7 @@ class _NetworkChessScreenState extends State<NetworkChessScreen> {
                 onMove: _submitMove,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 7),
             if (_error != null)
               Text(
                 _error!,
@@ -143,18 +154,21 @@ class _NetworkChessScreenState extends State<NetworkChessScreen> {
               child: Text(
                 _statusText,
                 style: const TextStyle(
-                  fontSize: 17,
+                  fontSize: 14,
                   fontWeight: FontWeight.w800,
                   color: AppColors.heading,
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 3),
             Text(
               _match.moves.isEmpty
                   ? 'No moves yet.'
                   : 'Moves: ${_match.moves.map((move) => '${move.from}-${move.to}').join('  ')}',
               textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
             ),
           ],
         ),

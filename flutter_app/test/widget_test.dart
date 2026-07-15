@@ -287,6 +287,11 @@ void main() {
       ),
     );
 
+    expect(
+      tester.getSize(find.byKey(const Key('interactive-chess-board'))).width,
+      greaterThan(700),
+    );
+
     await tester.tap(find.byKey(const Key('square-e2')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('square-e4')));

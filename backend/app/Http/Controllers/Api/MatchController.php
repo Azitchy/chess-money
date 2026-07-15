@@ -18,15 +18,18 @@ class MatchController extends Controller
             'mode' => ['required', 'in:casual,competitive'],
             'bet_amount' => ['nullable', 'numeric', 'min:0'],
             'time_control' => ['required', 'in:bullet,blitz,rapid,classical'],
-            'opponent_id' => ['nullable', 'integer', 'exists:users,id'],
+            'opponent_id' => ['required', 'integer', 'exists:users,id'],
         ]);
 
         $betAmount = $data['mode'] === 'competitive' ? (float) ($data['bet_amount'] ?? 0) : 0;
         if ($data['mode'] === 'competitive' && $betAmount <= 0) {
             return response()->json(['message' => 'Competitive match requires a bet amount'], 422);
         }
+        if ($data['mode'] === 'competitive' && (float) $request->user()->wallet_balance < $betAmount) {
+            return response()->json(['message' => 'Insufficient wallet balance for this bet'], 422);
+        }
 
-        $opponentId = $data['opponent_id'] ?? null;
+        $opponentId = $data['opponent_id'];
         if ($opponentId === $request->user()->id) {
             return response()->json(['message' => 'Cannot challenge yourself'], 422);
         }

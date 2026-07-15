@@ -652,7 +652,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        'The challenge will be created as a competitive match and can be joined by the selected player.',
+                        'Opponent match only: both wallets lock the bet after acceptance. The winner receives the full pot; puzzles and bot games never affect wallet balance.',
                       ),
                     ],
                   ),
@@ -782,7 +782,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           '${match.playerOne?.name ?? 'A player'} challenged you.\n\n'
           'Stake: ${match.betAmount.toStringAsFixed(2)}\n'
           'Time: ${_titleCase(match.timeControl)}\n\n'
-          'On acceptance, the stake is locked from both wallets.',
+          'On acceptance, the stake is locked from both wallets.'
+          '\nWinner receives the full pot. Bot and puzzle games never affect wallets.',
         ),
         actions: [
           TextButton(
@@ -1011,73 +1012,101 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
     return Scaffold(
       backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
+        toolbarHeight: 52,
         title: Text(
           widget.title,
           style: const TextStyle(
             color: AppColors.heading,
             fontWeight: FontWeight.w800,
+            fontSize: 20,
           ),
         ),
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 32),
+        padding: const EdgeInsets.fromLTRB(6, 8, 6, 18),
         children: [
-          Text(
-            widget.subtitle,
-            style: const TextStyle(color: AppColors.mutedText, fontSize: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Text(
+              widget.subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppColors.mutedText, fontSize: 13),
+            ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 8),
           if (_isBot) ...[
-            DropdownButtonFormField<String>(
-              key: ValueKey(_botLevel),
-              initialValue: _botLevel,
-              decoration: InputDecoration(
-                labelText: 'Bot difficulty',
-                prefixIcon: const Icon(Icons.smart_toy_outlined),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(18),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: DropdownButtonFormField<String>(
+                key: ValueKey(_botLevel),
+                initialValue: _botLevel,
+                decoration: InputDecoration(
+                  labelText: 'Bot difficulty',
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  prefixIcon: const Icon(Icons.smart_toy_outlined, size: 20),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 42,
+                    minHeight: 38,
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Beginner', child: Text('Beginner')),
+                  DropdownMenuItem(
+                    value: 'Intermediate',
+                    child: Text('Intermediate'),
+                  ),
+                  DropdownMenuItem(value: 'Advanced', child: Text('Advanced')),
+                ],
+                onChanged: (value) {
+                  setState(() => _botLevel = value ?? 'Beginner');
+                  _resetGame();
+                },
+              ),
+            ),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  ChessBotEngine.profileFor(_botLevel).description,
+                  key: const Key('bot-difficulty-description'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.mutedText,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-              items: const [
-                DropdownMenuItem(value: 'Beginner', child: Text('Beginner')),
-                DropdownMenuItem(
-                  value: 'Intermediate',
-                  child: Text('Intermediate'),
-                ),
-                DropdownMenuItem(value: 'Advanced', child: Text('Advanced')),
-              ],
-              onChanged: (value) {
-                setState(() => _botLevel = value ?? 'Beginner');
-                _resetGame();
-              },
             ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                ChessBotEngine.profileFor(_botLevel).description,
-                key: const Key('bot-difficulty-description'),
-                style: const TextStyle(
-                  color: AppColors.mutedText,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 7),
           ],
-          _GameStatusBar(
-            message: _statusMessage,
-            isPositive: _puzzleSolved || _game.in_checkmate,
-            isThinking: _botThinking,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: _GameStatusBar(
+              message: _statusMessage,
+              isPositive: _puzzleSolved || _game.in_checkmate,
+              isThinking: _botThinking,
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 7),
           Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
+              constraints: const BoxConstraints(maxWidth: 720),
               child: AspectRatio(
                 aspectRatio: 1,
                 child: InteractiveChessBoard(
@@ -1093,7 +1122,7 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -1123,7 +1152,7 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 8),
           _MoveHistory(moves: _game.getHistory().whereType<String>().toList()),
         ],
       ),
@@ -1345,10 +1374,10 @@ class _GameStatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: isPositive ? const Color(0xFFE8FFF2) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isPositive ? const Color(0xFFB7E6C8) : const Color(0xFFDDE9FF),
         ),
@@ -1357,8 +1386,8 @@ class _GameStatusBar extends StatelessWidget {
         children: [
           if (isThinking)
             const SizedBox(
-              width: 20,
-              height: 20,
+              width: 17,
+              height: 17,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           else
@@ -1367,15 +1396,16 @@ class _GameStatusBar extends StatelessWidget {
               color: isPositive
                   ? const Color(0xFF16794C)
                   : const Color(0xFF63A83B),
-              size: 20,
+              size: 17,
             ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 7),
           Expanded(
             child: Text(
               message,
               key: const Key('game-status'),
               style: const TextStyle(
                 color: AppColors.heading,
+                fontSize: 13,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -1401,10 +1431,10 @@ class _BoardControl extends StatelessWidget {
   Widget build(BuildContext context) {
     return FilledButton.tonalIcon(
       onPressed: onPressed,
-      icon: Icon(icon, size: 19),
-      label: Text(label),
+      icon: Icon(icon, size: 17),
+      label: Text(label, style: const TextStyle(fontSize: 13)),
       style: FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
       ),
     );
   }
@@ -1419,10 +1449,10 @@ class _MoveHistory extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFDDE9FF)),
       ),
       child: Column(
@@ -1435,11 +1465,17 @@ class _MoveHistory extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 3),
           Text(
             moves.isEmpty ? 'No moves yet' : moves.join('  '),
             key: const Key('move-history'),
-            style: const TextStyle(color: AppColors.mutedText, height: 1.5),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.mutedText,
+              height: 1.25,
+              fontSize: 12,
+            ),
           ),
         ],
       ),
