@@ -25,7 +25,8 @@ Prerequisite: PHP 8.2 or newer.
 
 1. `cd backend`
 2. `php artisan migrate:fresh --seed --force`
-3. `php artisan serve --host=0.0.0.0 --port=8000`
+3. `php artisan storage:link`
+4. `php artisan serve --host=0.0.0.0 --port=8000`
 
 Flutter:
 
@@ -58,6 +59,10 @@ Auth:
 - `POST /api/login`
 - `GET /api/me`
 - `POST /api/logout`
+
+Profile:
+- `GET /api/profile`
+- `POST /api/profile` (multipart form data; optional `avatar` image up to 5 MB)
 
 Wallet:
 - `GET /api/wallet`

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../registered_user.dart';
+import '../user_profile.dart';
 
 class ApiClient {
   ApiClient._(this._baseUrl, this._prefs);
@@ -172,8 +173,78 @@ class ApiClient {
     final users = data['data'] as List<dynamic>;
     return users
         .whereType<Map<String, dynamic>>()
-        .map(RegisteredUser.fromJson)
+        .map(
+          (json) => RegisteredUser.fromJson(
+            json,
+            resolveAvatarUrl: resolveMediaUrl,
+          ),
+        )
         .toList(growable: false);
+  }
+
+  Future<UserProfile> getProfile() async {
+    final response = await http
+        .get(Uri.parse('$_baseUrl/profile'), headers: _headers)
+        .timeout(_requestTimeout);
+    return UserProfile.fromJson(
+      _decode(response),
+      resolveAvatarUrl: resolveMediaUrl,
+    );
+  }
+
+  Future<UserProfile> updateProfile({
+    required String name,
+    required String email,
+    required String phoneNumber,
+    required String address,
+    Uint8List? avatarBytes,
+    String? avatarFilename,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_baseUrl/profile'),
+    );
+    if (_token != null) {
+      request.headers['Authorization'] = 'Bearer $_token';
+    }
+    request.fields.addAll({
+      'name': name,
+      'email': email,
+      'phone_number': phoneNumber,
+      'address': address,
+    });
+    if (avatarBytes != null) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'avatar',
+          avatarBytes,
+          filename: avatarFilename ?? 'avatar.jpg',
+        ),
+      );
+    }
+
+    final streamed = await request.send().timeout(_requestTimeout);
+    final response = await http.Response.fromStream(streamed);
+    final data = _decode(response);
+    return UserProfile.fromJson(
+      data['user'] as Map<String, dynamic>,
+      resolveAvatarUrl: resolveMediaUrl,
+    );
+  }
+
+  String? resolveMediaUrl(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+
+    final mediaUri = Uri.tryParse(value);
+    if (mediaUri != null && mediaUri.hasScheme) {
+      return mediaUri.toString();
+    }
+
+    final apiUri = Uri.parse(_baseUrl);
+    final path = value.startsWith('/') ? value : '/$value';
+    return apiUri.replace(path: path, query: null, fragment: null).toString();
   }
 
   Future<void> requestFunds(double amount, {String? note}) async {

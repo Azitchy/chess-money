@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app_colors.dart';
 import '../dashboard_widgets.dart';
 import '../match_summary.dart';
 import '../registered_user.dart';
 import '../services/api_client.dart';
+import 'profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
@@ -90,6 +92,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            tooltip: 'My profile',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => ProfileScreen(
+                    apiClient: widget.apiClient,
+                    demoMode: widget.demoMode,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.account_circle_outlined),
+            color: AppColors.deepPurple,
+          ),
           IconButton(
             onPressed: () async {
               if (!widget.demoMode) {
@@ -281,13 +298,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               controller: _playerSearch,
               label: 'Search online player',
             ),
-            if (_selectedOpponent != null) ...[
-              const SizedBox(height: 12),
-              _SelectedOpponentBanner(
-                user: _selectedOpponent!,
-                onClear: () => setState(() => _selectedOpponent = null),
-              ),
-            ],
             const SizedBox(height: 12),
             if (onlinePlayers.isEmpty)
               const Padding(
@@ -298,11 +308,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ...onlinePlayers.map(
                 (user) => PlayerTile(
                   user: user,
-                  selected: _selectedOpponent?.id == user.id,
-                  buttonLabel: _selectedOpponent?.id == user.id
-                      ? 'Selected'
-                      : 'Play',
-                  onChallenge: () => _selectOpponent(user, moveToHome: true),
+                  buttonLabel: 'Send challenge',
+                  onChallenge: widget.demoMode
+                      ? _demoAction
+                      : () => _showChallengeDialog(user),
                 ),
               ),
           ],
@@ -463,6 +472,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
           winnerId: null,
         ),
       ];
+      _users = [
+        RegisteredUser(
+          id: 201,
+          name: 'Maya Knight',
+          username: 'maya_knight',
+          email: 'maya@example.com',
+          isOnline: true,
+          lastSeenAt: DateTime.now(),
+        ),
+        RegisteredUser(
+          id: 202,
+          name: 'Leo Rook',
+          username: 'leo_rook',
+          email: 'leo@example.com',
+          isOnline: true,
+          lastSeenAt: DateTime.now().subtract(const Duration(seconds: 20)),
+        ),
+      ];
       _loading = false;
     });
   }
@@ -566,7 +593,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: timeControl,
+                        initialValue: timeControl,
                         decoration: const InputDecoration(
                           labelText: 'Time control',
                         ),
@@ -622,7 +649,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       final betAmount = double.parse(betController.text.trim());
-      await widget.apiClient.createMatch(
+      final created = await widget.apiClient.createMatch(
         mode: 'competitive',
         betAmount: betAmount,
         timeControl: timeControl,
@@ -633,10 +660,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Challenge sent to @${user.username}')),
+      final matchId = (created['id'] as num).toInt();
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ChallengeSuccessScreen(
+            matchId: matchId,
+            opponent: user,
+            betAmount: betAmount,
+            timeControl: timeControl,
+          ),
+        ),
       );
-      await _load();
+
+      if (mounted) {
+        await _load();
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _error = _friendlyError(e));
@@ -646,8 +684,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  List<RegisteredUser> get _onlinePlayers =>
-      _users.where((user) => user.isOnline).toList(growable: false);
+  List<RegisteredUser> get _onlinePlayers {
+    final players = _users.where((user) => user.isOnline).toList();
+    players.sort((a, b) {
+      final aSeen = a.lastSeenAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bSeen = b.lastSeenAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bSeen.compareTo(aSeen);
+    });
+    return players;
+  }
 
   List<RegisteredUser> get _filteredOnlinePlayers {
     final query = _playerSearch.text.trim().toLowerCase();
@@ -680,13 +725,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return null;
   }
 
-  void _selectOpponent(RegisteredUser user, {bool moveToHome = false}) {
+  void _selectOpponent(RegisteredUser user) {
     setState(() {
       _selectedOpponent = user;
       _playerSearch.text = user.username;
-      if (moveToHome) {
-        _selectedIndex = 0;
-      }
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -703,6 +745,196 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _friendlyError(Object error) {
     return error.toString().replaceFirst('Exception: ', '');
   }
+}
+
+class ChallengeSuccessScreen extends StatelessWidget {
+  const ChallengeSuccessScreen({
+    super.key,
+    required this.matchId,
+    required this.opponent,
+    required this.betAmount,
+    required this.timeControl,
+  });
+
+  final int matchId;
+  final RegisteredUser opponent;
+  final double betAmount;
+  final String timeControl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.pageBackground,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          tooltip: 'Close',
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.close_rounded),
+        ),
+      ),
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Column(
+                children: [
+                  Container(
+                    width: 88,
+                    height: 88,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE8FFF2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      color: Color(0xFF16794C),
+                      size: 52,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Challenge sent!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.heading,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '@${opponent.username} can now join your match.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.mutedText,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: const Color(0xFFDDE9FF)),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'NEW MATCH ID',
+                          style: TextStyle(
+                            color: AppColors.mutedText,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '#$matchId',
+                          key: const Key('challenge-match-id'),
+                          style: const TextStyle(
+                            color: AppColors.deepPurple,
+                            fontSize: 36,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton.icon(
+                          onPressed: () async {
+                            await Clipboard.setData(
+                              ClipboardData(text: matchId.toString()),
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Match ID copied'),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.copy_rounded, size: 18),
+                          label: const Text('Copy match ID'),
+                        ),
+                        const Divider(height: 28),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _ChallengeDetail(
+                                label: 'Opponent',
+                                value: opponent.name,
+                              ),
+                            ),
+                            Expanded(
+                              child: _ChallengeDetail(
+                                label: 'Time',
+                                value: _titleCase(timeControl),
+                              ),
+                            ),
+                            Expanded(
+                              child: _ChallengeDetail(
+                                label: 'Stake',
+                                value: '\$${betAmount.toStringAsFixed(2)}',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  PrimaryActionButton(
+                    label: 'Back to online players',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChallengeDetail extends StatelessWidget {
+  const _ChallengeDetail({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: AppColors.mutedText, fontSize: 12),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.heading,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _titleCase(String value) {
+  if (value.isEmpty) return value;
+  return '${value[0].toUpperCase()}${value.substring(1)}';
 }
 
 class _SelectedOpponentBanner extends StatelessWidget {

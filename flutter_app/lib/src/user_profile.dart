@@ -1,34 +1,34 @@
-class RegisteredUser {
-  const RegisteredUser({
+class UserProfile {
+  const UserProfile({
     required this.id,
     required this.name,
     required this.username,
     required this.email,
-    required this.isOnline,
-    required this.lastSeenAt,
-    this.avatarUrl,
+    required this.phoneNumber,
+    required this.address,
+    required this.avatarUrl,
   });
 
   final int id;
   final String name;
   final String username;
   final String email;
-  final bool isOnline;
-  final DateTime? lastSeenAt;
+  final String phoneNumber;
+  final String address;
   final String? avatarUrl;
 
-  factory RegisteredUser.fromJson(
+  factory UserProfile.fromJson(
     Map<String, dynamic> json, {
     String? Function(String?)? resolveAvatarUrl,
   }) {
     final rawAvatarUrl = json['avatar_url']?.toString();
-    return RegisteredUser(
+    return UserProfile(
       id: (json['id'] as num).toInt(),
       name: json['name']?.toString() ?? '',
       username: json['username']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
-      isOnline: json['is_online'] == true,
-      lastSeenAt: DateTime.tryParse(json['last_seen_at']?.toString() ?? ''),
+      phoneNumber: json['phone_number']?.toString() ?? '',
+      address: json['address']?.toString() ?? '',
       avatarUrl: resolveAvatarUrl == null
           ? rawAvatarUrl
           : resolveAvatarUrl(rawAvatarUrl),

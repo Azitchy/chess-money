@@ -496,17 +496,7 @@ class PlayerTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.blue, AppColors.lavender],
-              ),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.person, color: Colors.white, size: 22),
-          ),
+          _PlayerAvatar(user: user),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -530,7 +520,7 @@ class PlayerTile extends StatelessWidget {
                   runSpacing: 8,
                   children: [
                     _StatusChip(
-                      label: user.isOnline ? 'Online' : 'Offline',
+                      label: user.isOnline ? 'Online now' : 'Offline',
                       background: user.isOnline
                           ? const Color(0xFFE8FFF2)
                           : const Color(0xFFF1F5F9),
@@ -567,6 +557,80 @@ class PlayerTile extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlayerAvatar extends StatelessWidget {
+  const _PlayerAvatar({required this.user});
+
+  final RegisteredUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.blue, AppColors.lavender],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: user.avatarUrl == null
+                ? Text(
+                    _initials(user.name),
+                    semanticsLabel: '${user.name} avatar',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  )
+                : ClipOval(
+                    child: Image.network(
+                      user.avatarUrl!,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Center(
+                        child: Text(
+                          _initials(user.name),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+          if (user.isOnline)
+            Positioned(
+              right: -1,
+              bottom: -1,
+              child: Container(
+                width: 15,
+                height: 15,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22C55E),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2.5),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -610,4 +674,14 @@ String _relativeTime(DateTime dateTime) {
   if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
   if (diff.inHours < 24) return '${diff.inHours}h ago';
   return '${diff.inDays}d ago';
+}
+
+String _initials(String name) {
+  final parts = name.trim().split(RegExp(r'\s+'));
+  final populated = parts.where((part) => part.isNotEmpty).toList();
+  if (populated.isEmpty) return '?';
+  if (populated.length == 1) {
+    return populated.first.substring(0, 1).toUpperCase();
+  }
+  return '${populated.first[0]}${populated.last[0]}'.toUpperCase();
 }

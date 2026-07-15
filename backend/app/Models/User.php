@@ -16,6 +16,8 @@ class User extends Authenticatable
         'username',
         'email',
         'phone_number',
+        'avatar_path',
+        'address',
         'password',
         'wallet_balance',
         'is_admin',
@@ -28,6 +30,7 @@ class User extends Authenticatable
         'password',
         'remember_token',
         'api_token',
+        'avatar_path',
     ];
 
     protected function casts(): array
