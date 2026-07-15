@@ -25,7 +25,7 @@ Prerequisite: PHP 8.2 or newer.
 
 1. `cd backend`
 2. `php artisan migrate:fresh --seed --force`
-3. `php artisan serve`
+3. `php artisan serve --host=0.0.0.0 --port=8000`
 
 Flutter:
 
@@ -33,7 +33,13 @@ Flutter:
 2. `flutter pub get`
 3. `flutter run`
 
-Backend server: `http://127.0.0.1:8000`
+Backend server from this computer: `http://127.0.0.1:8000`
+
+Backend server from a physical phone on the same Wi-Fi: use the computer's
+IPv4 address, for example `http://192.168.0.195:8000/api`. Laravel must be
+started with `--host=0.0.0.0`; the default localhost binding is not reachable
+from another device. If the computer's DHCP address changes, run `ipconfig`
+and save the new IPv4 address in the app's Backend URL field.
 
 Admin web panel: `http://127.0.0.1:8000/admin/login`
 
@@ -41,13 +47,9 @@ Default seeded admin credentials:
 - Email: `admin@chessbet.local`
 - Password: `Admin@12345`
 
-Flutter API base URL is currently:
-
-- `http://10.0.2.2:8000/api` (Android emulator)
-
-If running on physical device or iOS simulator, update:
-
-- `flutter_app/lib/src/services/api_client.dart`
+Flutter API base URL can be changed at runtime from the login screen. For an
+Android emulator use `http://10.0.2.2:8000/api`; for a physical device use the
+computer's LAN IPv4 address.
 
 ## API Endpoints
 

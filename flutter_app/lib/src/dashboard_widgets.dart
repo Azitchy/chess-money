@@ -468,10 +468,18 @@ class MatchTile extends StatelessWidget {
 }
 
 class PlayerTile extends StatelessWidget {
-  const PlayerTile({super.key, required this.user, required this.onChallenge});
+  const PlayerTile({
+    super.key,
+    required this.user,
+    required this.onChallenge,
+    this.buttonLabel = 'Challenge',
+    this.selected = false,
+  });
 
   final RegisteredUser user;
   final VoidCallback onChallenge;
+  final String buttonLabel;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -479,9 +487,12 @@ class PlayerTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7FAFF),
+        color: selected ? const Color(0xFFEFF6FF) : const Color(0xFFF7FAFF),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFDDE9FF)),
+        border: Border.all(
+          color: selected ? AppColors.blue : const Color(0xFFDDE9FF),
+          width: selected ? 1.4 : 1,
+        ),
       ),
       child: Row(
         children: [
@@ -542,16 +553,18 @@ class PlayerTile extends StatelessWidget {
           FilledButton(
             onPressed: onChallenge,
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.deepPurple,
-              foregroundColor: Colors.white,
+              backgroundColor: selected
+                  ? const Color(0xFFE0ECFF)
+                  : AppColors.deepPurple,
+              foregroundColor: selected ? AppColors.heading : Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            child: const Text(
-              'Challenge',
-              style: TextStyle(fontWeight: FontWeight.w700),
+            child: Text(
+              buttonLabel,
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
         ],

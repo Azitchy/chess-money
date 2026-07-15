@@ -39,7 +39,9 @@ class ApiClient {
       return 'http://127.0.0.1:8000/api';
     }
 
-    return 'http://192.168.0.191:8000/api';
+    // Physical devices cannot reach the development computer through
+    // localhost. This is the computer's current Wi-Fi/LAN address.
+    return 'http://192.168.0.195:8000/api';
   }
 
   static String? _normalizeSavedBaseUrl(String? baseUrl) {
@@ -52,6 +54,9 @@ class ApiClient {
       'http://10.0.2.2:8000/api',
       'http://127.0.0.1:8000/api',
       'http://localhost:8000/api',
+      // Previous development-machine address. Ignore it so existing installs
+      // migrate to the current default instead of keeping an unreachable URL.
+      'http://192.168.0.191:8000/api',
     ];
 
     if (staleLocalHosts.contains(normalized)) {
