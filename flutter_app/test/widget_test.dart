@@ -69,7 +69,9 @@ void main() {
     expect(progress.awarded, isTrue);
   });
 
-  testWidgets('chess pieces use pure white and black fills', (tester) async {
+  testWidgets('chess pieces use responsive white and black PNG assets', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Row(
@@ -81,14 +83,17 @@ void main() {
       ),
     );
 
-    final filledGlyphs = tester
-        .widgetList<Text>(find.byType(Text))
-        .where((text) => text.style?.color != null)
-        .toList();
-    expect(filledGlyphs.map((text) => text.style!.color), [
-      Colors.white,
-      Colors.black,
-    ]);
+    final images = tester.widgetList<Image>(find.byType(Image)).toList();
+    expect(images, hasLength(2));
+    expect(
+      (images[0].image as AssetImage).assetName,
+      'lib/src/assets/white_king.png',
+    );
+    expect(
+      (images[1].image as AssetImage).assetName,
+      'lib/src/assets/black_king.png',
+    );
+    expect(images.every((image) => image.fit == BoxFit.contain), isTrue);
   });
 
   test('bot difficulty profiles increase search strength', () {
