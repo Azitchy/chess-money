@@ -3,11 +3,20 @@
 @section('content')
 @php
   $selectedId = $selectedConversation?->id;
+  $isWithdrawal = ($requestType ?? 'funding') === 'withdrawal';
+  $pageTitle = $isWithdrawal ? 'Withdraw Requests' : 'Wallet Messages';
+  $pageCrumb = $isWithdrawal ? 'Admin / Withdrawal Inbox' : 'Admin / Wallet Support Inbox';
+  $replyRoute = $isWithdrawal ? 'admin.withdraw-requests.reply' : 'admin.funding-requests.reply';
+  $approveRoute = $isWithdrawal ? 'admin.withdraw-requests.approve' : 'admin.funding-requests.approve';
+  $rejectRoute = $isWithdrawal ? 'admin.withdraw-requests.reject' : 'admin.funding-requests.reject';
+  $threadRoute = $isWithdrawal ? 'admin.withdraw-requests.thread' : 'admin.funding-requests.thread';
+  $emptyText = $isWithdrawal ? 'No withdraw requests yet.' : 'No wallet messages yet.';
+  $approveLabel = $isWithdrawal ? 'Approve Withdrawal' : 'Approve Funding';
 @endphp
 
 <div class="content-header">
-  <h1>Wallet Messages</h1>
-  <div class="crumb">Admin / Wallet Support Inbox</div>
+  <h1>{{ $pageTitle }}</h1>
+  <div class="crumb">{{ $pageCrumb }}</div>
 </div>
 
 <div class="two-col" style="align-items:start">
@@ -19,7 +28,7 @@
     <div id="conversation-list">
       @forelse($conversations as $conversation)
         <a
-          href="{{ route('admin.funding-requests', ['conversation' => $conversation->id]) }}"
+          href="{{ route($isWithdrawal ? 'admin.withdraw-requests' : 'admin.funding-requests', ['conversation' => $conversation->id]) }}"
           style="display:block;padding:12px 14px;margin-bottom:10px;border-radius:14px;border:1px solid {{ $selectedId === $conversation->id ? '#93c5fd' : '#dbe4ef' }};background:{{ $selectedId === $conversation->id ? '#eff6ff' : '#fff' }}"
         >
           <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
@@ -28,6 +37,7 @@
               {{ ucfirst($conversation->status) }}
             </span>
           </div>
+          <div style="margin-top:4px;color:#475569">Type: {{ ucfirst($conversation->conversation_type ?? 'funding') }}</div>
           <div style="margin-top:4px;color:#475569">User: {{ $conversation->user?->name }} @{{ $conversation->user?->username }}</div>
           <div style="margin-top:4px;color:#64748b;font-size:13px">
             Amount: ${{ number_format((float) $conversation->amount, 2) }}
@@ -37,7 +47,7 @@
           </div>
         </a>
       @empty
-        <div style="color:#64748b">No wallet messages yet.</div>
+        <div style="color:#64748b">{{ $emptyText }}</div>
       @endforelse
     </div>
     <div style="margin-top:12px">{{ $conversations->links() }}</div>
@@ -83,7 +93,7 @@
         @endforeach
       </div>
 
-      <form method="POST" action="{{ route('admin.funding-requests.reply', $selectedConversation) }}" enctype="multipart/form-data">
+      <form method="POST" action="{{ route($replyRoute, $selectedConversation) }}" enctype="multipart/form-data">
         @csrf
         <label for="reply-body"><strong>Reply</strong></label>
         <textarea id="reply-body" name="body" rows="4" placeholder="Write your message to the user..." required></textarea>
@@ -95,13 +105,13 @@
 
       @if($selectedConversation->status === 'open')
         <div class="form-actions" style="margin-top:12px">
-          <form class="inline" method="POST" action="{{ route('admin.funding-requests.approve', $selectedConversation) }}">@csrf <button class="btn btn-success" type="submit">Approve Funding</button></form>
-          <form class="inline" method="POST" action="{{ route('admin.funding-requests.reject', $selectedConversation) }}">@csrf <button class="btn btn-danger" type="submit">Reject</button></form>
+          <form class="inline" method="POST" action="{{ route($approveRoute, $selectedConversation) }}">@csrf <button class="btn btn-success" type="submit">{{ $approveLabel }}</button></form>
+          <form class="inline" method="POST" action="{{ route($rejectRoute, $selectedConversation) }}">@csrf <button class="btn btn-danger" type="submit">Reject</button></form>
         </div>
       @endif
 
       <div id="thread-endpoint"
-           data-thread-url="{{ route('admin.funding-requests.thread', $selectedConversation) }}"
+           data-thread-url="{{ route($threadRoute, $selectedConversation) }}"
            data-selected-id="{{ $selectedConversation->id }}"
            style="display:none"></div>
     @else

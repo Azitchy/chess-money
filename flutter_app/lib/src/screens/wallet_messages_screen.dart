@@ -10,9 +10,14 @@ import '../services/api_client.dart';
 import '../wallet_conversation.dart';
 
 class WalletMessagesScreen extends StatefulWidget {
-  const WalletMessagesScreen({super.key, required this.apiClient});
+  const WalletMessagesScreen({
+    super.key,
+    required this.apiClient,
+    this.initialRequestType = 'funding',
+  });
 
   final ApiClient apiClient;
+  final String initialRequestType;
 
   @override
   State<WalletMessagesScreen> createState() => _WalletMessagesScreenState();
@@ -25,6 +30,7 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
   final _imagePicker = ImagePicker();
 
   Timer? _poller;
+  late String _requestType;
   List<WalletConversation> _conversations = const [];
   WalletConversation? _selectedConversation;
   bool _sendingRequest = false;
@@ -38,6 +44,9 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
   @override
   void initState() {
     super.initState();
+    _requestType = widget.initialRequestType == 'withdrawal'
+        ? 'withdrawal'
+        : 'funding';
     _loadConversations();
     _poller = Timer.periodic(const Duration(seconds: 5), (_) => _refresh());
   }
@@ -56,9 +65,11 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
     return Scaffold(
       backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
-        title: const Text(
-          'Wallet Messages',
-          style: TextStyle(
+        title: Text(
+          _requestType == 'withdrawal'
+              ? 'Withdraw Requests'
+              : 'Wallet Messages',
+          style: const TextStyle(
             color: AppColors.heading,
             fontWeight: FontWeight.w800,
           ),
@@ -73,7 +84,9 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
           children: [
-            const _IntroCard(),
+            _buildTypeSwitcher(),
+            const SizedBox(height: 14),
+            _IntroCard(requestType: _requestType),
             const SizedBox(height: 14),
             if (_error != null) ...[
               ErrorBanner(message: _error!),
@@ -91,8 +104,9 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
   }
 
   Widget _buildNewRequestCard() {
+    final isWithdrawal = _requestType == 'withdrawal';
     return SectionCard(
-      title: 'Start a wallet request',
+      title: isWithdrawal ? 'Request a withdrawal' : 'Start a wallet request',
       icon: Icons.request_page_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -100,7 +114,12 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
           DashboardInputField(
             controller: _requestAmount,
             label: 'Amount',
-            keyboardType: TextInputType.number,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            isWithdrawal ? 'Minimum 500' : 'Minimum 1',
+            style: const TextStyle(color: AppColors.mutedText, fontSize: 12),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -108,7 +127,7 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
             minLines: 3,
             maxLines: 5,
             decoration: InputDecoration(
-              labelText: 'Message',
+              labelText: isWithdrawal ? 'Withdrawal note' : 'Message',
               filled: true,
               fillColor: const Color(0xFFF7FAFF),
               border: OutlineInputBorder(
@@ -133,7 +152,9 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
           ),
           const SizedBox(height: 14),
           PrimaryActionButton(
-            label: _sendingRequest ? 'Sending...' : 'Send to admin',
+            label: _sendingRequest
+                ? 'Sending...'
+                : (isWithdrawal ? 'Send withdrawal request' : 'Send to admin'),
             onPressed: _sendingRequest ? () {} : _sendRequest,
           ),
         ],
@@ -142,15 +163,20 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
   }
 
   Widget _buildConversationList() {
+    final isWithdrawal = _requestType == 'withdrawal';
     return SectionCard(
-      title: 'Conversations',
+      title: isWithdrawal ? 'Withdrawal conversations' : 'Conversations',
       icon: Icons.chat_bubble_outline_rounded,
       child: Column(
         children: _conversations.isEmpty
-            ? const [
+            ? [
                 Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('No wallet messages yet.'),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    isWithdrawal
+                        ? 'No withdraw requests yet.'
+                        : 'No wallet messages yet.',
+                  ),
                 ),
               ]
             : _conversations.map((conversation) {
@@ -270,12 +296,28 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Status: ${conversation.status.toUpperCase()}',
-            style: const TextStyle(
-              color: AppColors.mutedText,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Status: ${conversation.status.toUpperCase()}',
+                  style: const TextStyle(
+                    color: AppColors.mutedText,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => _confirmDeleteConversation(conversation),
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: const Text('Delete chat'),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFB42318),
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           ...conversation.messages.map(
@@ -354,17 +396,23 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            isUser
-                ? 'You'
-                : isAdmin
-                ? 'Admin'
-                : 'System',
-            style: TextStyle(
-              color: textColor,
-              fontWeight: FontWeight.w800,
-              fontSize: compact ? 13 : 14,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  isUser
+                      ? 'You'
+                      : isAdmin
+                      ? 'Admin'
+                      : 'System',
+                  style: TextStyle(
+                    color: textColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: compact ? 13 : 14,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 5),
           if (message.body.trim().isNotEmpty)
@@ -411,7 +459,9 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
     });
 
     try {
-      final conversations = await widget.apiClient.getWalletConversations();
+      final conversations = await widget.apiClient.getWalletConversations(
+        type: _requestType,
+      );
       if (!mounted) return;
       final selectedId = preserveSelection ? _selectedConversation?.id : null;
       setState(() {
@@ -463,8 +513,13 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
   Future<void> _sendRequest() async {
     if (_sendingRequest) return;
     final amount = double.tryParse(_requestAmount.text.trim());
+    final isWithdrawal = _requestType == 'withdrawal';
     if (amount == null || amount <= 0) {
       setState(() => _error = 'Enter a valid amount.');
+      return;
+    }
+    if (isWithdrawal && amount < 500) {
+      setState(() => _error = 'Withdrawal amount must be at least 500.');
       return;
     }
 
@@ -479,6 +534,7 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
         body: _requestBody.text.trim(),
         attachmentBytes: _requestAttachmentBytes,
         attachmentFilename: _requestAttachmentName,
+        requestType: _requestType,
       );
       if (!mounted) return;
       setState(() {
@@ -489,9 +545,15 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
         _conversations = [conversation, ..._conversations];
         _selectedConversation = conversation;
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Message sent to admin')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isWithdrawal
+                ? 'Withdrawal request sent to admin'
+                : 'Message sent to admin',
+          ),
+        ),
+      );
       await _loadConversations();
     } catch (error) {
       if (mounted) {
@@ -541,6 +603,49 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
     } finally {
       if (mounted) {
         setState(() => _sendingReply = false);
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteConversation(
+    WalletConversation conversation,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete chat?'),
+        content: const Text(
+          'This will delete the whole wallet chat box and all messages in it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await widget.apiClient.deleteWalletConversation(conversation.id);
+      if (!mounted) return;
+      setState(() {
+        _selectedConversation = null;
+      });
+      await _loadConversations(preserveSelection: false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Chat deleted')));
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = friendlyAppErrorMessage(error));
       }
     }
   }
@@ -604,13 +709,44 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
+
+  Widget _buildTypeSwitcher() {
+    final isWithdrawal = _requestType == 'withdrawal';
+    return ToggleButtons(
+      isSelected: [!isWithdrawal, isWithdrawal],
+      onPressed: (index) {
+        final nextType = index == 1 ? 'withdrawal' : 'funding';
+        if (_requestType == nextType) return;
+        setState(() {
+          _requestType = nextType;
+          _selectedConversation = null;
+        });
+        _loadConversations(preserveSelection: false);
+      },
+      borderRadius: BorderRadius.circular(16),
+      constraints: const BoxConstraints(minHeight: 44, minWidth: 130),
+      children: const [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 10),
+          child: Text('Funding'),
+        ),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 10),
+          child: Text('Withdraw'),
+        ),
+      ],
+    );
+  }
 }
 
 class _IntroCard extends StatelessWidget {
-  const _IntroCard();
+  const _IntroCard({required this.requestType});
+
+  final String requestType;
 
   @override
   Widget build(BuildContext context) {
+    final isWithdrawal = requestType == 'withdrawal';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -621,9 +757,11 @@ class _IntroCard extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(26),
       ),
-      child: const Text(
-        'Send funding requests as messages, keep the thread open, and let admin reply right here. You can attach a photo from gallery or camera.',
-        style: TextStyle(
+      child: Text(
+        isWithdrawal
+            ? 'Request a withdrawal as a message thread. Keep the chat open, attach a photo if needed, and let admin reply right here.'
+            : 'Send funding requests as messages, keep the thread open, and let admin reply right here. You can attach a photo from gallery or camera.',
+        style: const TextStyle(
           color: Colors.white,
           height: 1.4,
           fontWeight: FontWeight.w600,

@@ -1,6 +1,7 @@
 class WalletConversation {
   const WalletConversation({
     required this.id,
+    required this.conversationType,
     required this.subject,
     required this.amount,
     required this.status,
@@ -12,6 +13,7 @@ class WalletConversation {
   });
 
   final int id;
+  final String conversationType;
   final String subject;
   final double amount;
   final String status;
@@ -25,6 +27,7 @@ class WalletConversation {
     final rawMessages = json['messages'];
     return WalletConversation(
       id: _asInt(json['id']) ?? 0,
+      conversationType: json['conversation_type']?.toString() ?? 'funding',
       subject: json['subject']?.toString() ?? 'Wallet support',
       amount: double.tryParse(json['amount']?.toString() ?? '') ?? 0,
       status: json['status']?.toString() ?? 'open',

@@ -23,7 +23,8 @@ class AdminDashboardController extends Controller
             'active_users' => User::where('is_active', true)->count(),
             'matches' => MatchGame::count(),
             'active_matches' => MatchGame::where('status', 'active')->count(),
-            'pending_funding_requests' => WalletConversation::where('status', 'open')->count(),
+            'pending_funding_requests' => WalletConversation::where('conversation_type', 'funding')->where('status', 'open')->count(),
+            'pending_withdrawal_requests' => WalletConversation::where('conversation_type', 'withdrawal')->where('status', 'open')->count(),
             'total_wagered' => (float) Bet::sum('amount'),
         ];
 
@@ -172,17 +173,12 @@ class AdminDashboardController extends Controller
 
     public function fundingRequests()
     {
-        $conversations = WalletConversation::with(['user', 'latestMessage.sender'])
-            ->latest('last_message_at')
-            ->paginate(20);
-        $selectedConversation = WalletConversation::with(['user', 'messages.sender'])
-            ->when(request()->integer('conversation'), function ($query, $conversationId) {
-                $query->whereKey($conversationId);
-            })
-            ->first()
-            ?? WalletConversation::with(['user', 'messages.sender'])->latest('last_message_at')->first();
+        return $this->walletRequestPage('funding');
+    }
 
-        return view('admin.funding_requests', compact('conversations', 'selectedConversation'));
+    public function withdrawRequests()
+    {
+        return $this->walletRequestPage('withdrawal');
     }
 
     public function walletConversationSummary(Request $request)
@@ -220,6 +216,11 @@ class AdminDashboardController extends Controller
         });
 
         return back()->with('success', 'Reply sent');
+    }
+
+    public function replyWithdrawal(Request $request, WalletConversation $conversation)
+    {
+        return $this->replyFunding($request, $conversation);
     }
 
     public function approveFunding(Request $request, WalletConversation $conversation, WalletService $walletService)
@@ -276,6 +277,64 @@ class AdminDashboardController extends Controller
         return back()->with('success', 'Funding rejected');
     }
 
+    public function approveWithdrawal(Request $request, WalletConversation $conversation, WalletService $walletService)
+    {
+        if ($conversation->status !== 'open') {
+            return back()->with('error', 'Conversation already processed');
+        }
+
+        DB::transaction(function () use ($request, $conversation, $walletService) {
+            $lockedConversation = WalletConversation::lockForUpdate()->findOrFail($conversation->id);
+            $user = User::lockForUpdate()->findOrFail($lockedConversation->user_id);
+            $amount = (float) ($lockedConversation->amount ?? 0);
+
+            if ($amount <= 0) {
+                abort(422, 'This conversation does not include a withdrawal amount');
+            }
+
+            if ((float) $user->wallet_balance < $amount) {
+                abort(422, 'User does not have enough wallet balance for this withdrawal');
+            }
+
+            $walletService->deductFunds($user, $amount, 'withdrawal', 'Admin approved withdrawal message');
+            $lockedConversation->status = 'approved';
+            $lockedConversation->save();
+
+            $this->storeConversationMessage(
+                conversation: $lockedConversation,
+                senderRole: 'system',
+                senderUserId: null,
+                body: 'Withdrawal approved. $'.number_format($amount, 2).' has been deducted from the wallet.',
+                attachment: null
+            );
+        });
+
+        return back()->with('success', 'Withdrawal approved');
+    }
+
+    public function rejectWithdrawal(Request $request, WalletConversation $conversation)
+    {
+        if ($conversation->status !== 'open') {
+            return back()->with('error', 'Conversation already processed');
+        }
+
+        DB::transaction(function () use ($request, $conversation) {
+            $lockedConversation = WalletConversation::lockForUpdate()->findOrFail($conversation->id);
+            $lockedConversation->status = 'rejected';
+            $lockedConversation->save();
+
+            $this->storeConversationMessage(
+                conversation: $lockedConversation,
+                senderRole: 'system',
+                senderUserId: null,
+                body: 'Withdrawal request declined by admin.',
+                attachment: null
+            );
+        });
+
+        return back()->with('success', 'Withdrawal rejected');
+    }
+
     public function matches()
     {
         $matches = MatchGame::latest()->paginate(20);
@@ -322,6 +381,7 @@ class AdminDashboardController extends Controller
     {
         return [
             'id' => $conversation->id,
+            'conversation_type' => $conversation->conversation_type,
             'subject' => $conversation->subject,
             'amount' => (float) ($conversation->amount ?? 0),
             'status' => $conversation->status,
@@ -345,6 +405,7 @@ class AdminDashboardController extends Controller
             'data' => $paginator->getCollection()
                 ->map(fn (WalletConversation $conversation) => [
                     'id' => $conversation->id,
+                    'conversation_type' => $conversation->conversation_type,
                     'subject' => $conversation->subject,
                     'amount' => (float) ($conversation->amount ?? 0),
                     'status' => $conversation->status,
@@ -388,6 +449,28 @@ class AdminDashboardController extends Controller
             'attachment_mime' => $message->attachment_mime,
             'created_at' => $message->created_at?->toISOString(),
         ];
+    }
+
+    private function walletRequestPage(string $type)
+    {
+        $conversations = WalletConversation::with(['user', 'latestMessage.sender'])
+            ->where('conversation_type', $type)
+            ->latest('last_message_at')
+            ->paginate(20);
+        $selectedConversation = WalletConversation::with(['user', 'messages.sender'])
+            ->where('conversation_type', $type)
+            ->when(request()->integer('conversation'), function ($query, $conversationId) {
+                $query->whereKey($conversationId);
+            })
+            ->first()
+            ?? WalletConversation::with(['user', 'messages.sender'])
+                ->where('conversation_type', $type)
+                ->latest('last_message_at')
+                ->first();
+
+        $requestType = $type;
+
+        return view('admin.funding_requests', compact('conversations', 'selectedConversation', 'requestType'));
     }
 
     private function validateUser(Request $request, ?User $user = null): array

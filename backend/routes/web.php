@@ -30,6 +30,12 @@ Route::middleware(['auth', 'admin.web'])->prefix('admin')->group(function () {
     Route::post('/funding-requests/{conversation}/reply', [AdminDashboardController::class, 'replyFunding'])->name('admin.funding-requests.reply');
     Route::post('/funding-requests/{conversation}/approve', [AdminDashboardController::class, 'approveFunding'])->name('admin.funding-requests.approve');
     Route::post('/funding-requests/{conversation}/reject', [AdminDashboardController::class, 'rejectFunding'])->name('admin.funding-requests.reject');
+    Route::get('/withdraw-requests', [AdminDashboardController::class, 'withdrawRequests'])->name('admin.withdraw-requests');
+    Route::get('/withdraw-requests/summary', [AdminDashboardController::class, 'walletConversationSummary'])->name('admin.withdraw-requests.summary');
+    Route::get('/withdraw-requests/{conversation}', [AdminDashboardController::class, 'walletConversationThread'])->name('admin.withdraw-requests.thread');
+    Route::post('/withdraw-requests/{conversation}/reply', [AdminDashboardController::class, 'replyWithdrawal'])->name('admin.withdraw-requests.reply');
+    Route::post('/withdraw-requests/{conversation}/approve', [AdminDashboardController::class, 'approveWithdrawal'])->name('admin.withdraw-requests.approve');
+    Route::post('/withdraw-requests/{conversation}/reject', [AdminDashboardController::class, 'rejectWithdrawal'])->name('admin.withdraw-requests.reject');
     Route::get('/matches', [AdminDashboardController::class, 'matches'])->name('admin.matches');
     Route::get('/transactions', [AdminDashboardController::class, 'transactions'])->name('admin.transactions');
 });

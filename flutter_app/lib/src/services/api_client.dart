@@ -347,9 +347,14 @@ class ApiClient {
     _decode(response);
   }
 
-  Future<List<WalletConversation>> getWalletConversations() async {
+  Future<List<WalletConversation>> getWalletConversations({
+    String? type,
+  }) async {
+    final uri = Uri.parse(
+      '$_baseUrl/wallet/conversations',
+    ).replace(queryParameters: type == null ? null : {'type': type});
     final response = await http
-        .get(Uri.parse('$_baseUrl/wallet/conversations'), headers: _headers)
+        .get(uri, headers: _headers)
         .timeout(_requestTimeout);
     final data = _decode(response);
     return _conversationList(data['data']);
@@ -394,18 +399,34 @@ class ApiClient {
     return WalletConversation.fromJson(_decode(response));
   }
 
+  Future<void> deleteWalletConversation(int conversationId) async {
+    final response = await http
+        .delete(
+          Uri.parse('$_baseUrl/wallet/conversations/$conversationId'),
+          headers: _headers,
+        )
+        .timeout(_requestTimeout);
+    _decode(response);
+  }
+
   Future<WalletConversation> createWalletConversation({
     required double amount,
     String? body,
     Uint8List? attachmentBytes,
     String? attachmentFilename,
+    String requestType = 'funding',
   }) async {
     final request = http.MultipartRequest(
       'POST',
-      Uri.parse('$_baseUrl/wallet/request-funds'),
+      Uri.parse(
+        requestType == 'withdrawal'
+            ? '$_baseUrl/wallet/request-withdrawal'
+            : '$_baseUrl/wallet/request-funds',
+      ),
     );
     request.headers.addAll(_headers);
     request.fields['amount'] = amount.toString();
+    request.fields['request_type'] = requestType;
     if (body != null && body.trim().isNotEmpty) {
       request.fields['body'] = body.trim();
     }

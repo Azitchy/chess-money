@@ -410,33 +410,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildWalletPage() {
     return _buildPage('wallet', [
       SectionCard(
-        title: 'Wallet Messages',
+        title: 'Wallet Requests',
         icon: Icons.account_balance_wallet_outlined,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Send wallet funding requests as a message thread. Admin can reply and attach files back to you.',
+              'Send funding or withdrawal requests as message threads. Admin can reply and attach files back to you.',
               style: TextStyle(color: AppColors.mutedText, height: 1.45),
             ),
             const SizedBox(height: 14),
-            PrimaryActionButton(
-              label: 'Open wallet messages',
-              onPressed: widget.demoMode
-                  ? _demoAction
-                  : () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) =>
-                              WalletMessagesScreen(apiClient: widget.apiClient),
-                        ),
-                      );
-                    },
+            Row(
+              children: [
+                Expanded(
+                  child: PrimaryActionButton(
+                    label: 'Funding',
+                    onPressed: widget.demoMode
+                        ? _demoAction
+                        : () => _openWalletMessages('funding'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: PrimaryActionButton(
+                    label: 'Withdraw',
+                    onPressed: widget.demoMode
+                        ? _demoAction
+                        : () => _openWalletMessages('withdrawal'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
     ]);
+  }
+
+  void _openWalletMessages(String requestType) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => WalletMessagesScreen(
+          apiClient: widget.apiClient,
+          initialRequestType: requestType,
+        ),
+      ),
+    );
   }
 
   Widget _buildMatchActionsPage() {

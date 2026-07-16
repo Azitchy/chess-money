@@ -11,6 +11,7 @@ class WalletConversation extends Model
 {
     protected $fillable = [
         'user_id',
+        'conversation_type',
         'amount',
         'subject',
         'status',
@@ -20,6 +21,7 @@ class WalletConversation extends Model
     protected function casts(): array
     {
         return [
+            'conversation_type' => 'string',
             'amount' => 'decimal:2',
             'last_message_at' => 'datetime',
         ];

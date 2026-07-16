@@ -26,8 +26,11 @@ Route::middleware('token.auth')->group(function () {
     Route::get('/wallet/transactions', [WalletController::class, 'transactions']);
     Route::get('/wallet/conversations', [WalletController::class, 'conversations']);
     Route::get('/wallet/conversations/{conversation}', [WalletController::class, 'conversation']);
+    Route::delete('/wallet/conversations/{conversation}', [WalletController::class, 'deleteConversation']);
     Route::post('/wallet/conversations/{conversation}/reply', [WalletController::class, 'reply']);
+    Route::delete('/wallet/conversations/{conversation}/messages/{message}', [WalletController::class, 'deleteMessage']);
     Route::post('/wallet/request-funds', [WalletController::class, 'requestFunds']);
+    Route::post('/wallet/request-withdrawal', [WalletController::class, 'requestWithdrawal']);
 
     Route::post('/progress/puzzle-completed', [ProgressController::class, 'puzzleCompleted']);
     Route::post('/progress/bot-won', [ProgressController::class, 'botWon']);
