@@ -42,7 +42,7 @@ class HeroHeader extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.18),
+              color: Colors.white.withValues(alpha: 0.18),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -70,7 +70,7 @@ class HeroHeader extends StatelessWidget {
                       ? 'You are viewing the dashboard without logging in.'
                       : 'Manage your wallet and matches from one place.',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.88),
+                    color: Colors.white.withValues(alpha: 0.88),
                     height: 1.25,
                   ),
                 ),
@@ -106,9 +106,9 @@ class _HeroChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.16),
+        color: Colors.white.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.22)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
       ),
       child: Text(
         '$label: $value',
@@ -262,7 +262,7 @@ class DashboardDropdownField<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<T>(
       valueListenable: valueListenable,
-      builder: (_, value, __) {
+      builder: (context, value, _) {
         return InputDecorator(
           decoration: InputDecoration(
             labelText: label,
@@ -527,11 +527,6 @@ class PlayerTile extends StatelessWidget {
                       foreground: user.isOnline
                           ? const Color(0xFF16794C)
                           : const Color(0xFF475569),
-                    ),
-                    _StatusChip(
-                      label: 'Rating ${user.rating} • Level ${user.level}',
-                      background: const Color(0xFFFFF4E5),
-                      foreground: const Color(0xFFB45309),
                     ),
                     if (user.lastSeenAt != null)
                       _StatusChip(

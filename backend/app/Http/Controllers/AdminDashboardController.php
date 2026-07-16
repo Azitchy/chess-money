@@ -5,7 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Bet;
 use App\Models\MatchGame;
 use App\Models\User;
-use App\Models\WalletFundingRequest;
+use App\Models\WalletConversation;
+use App\Models\WalletMessage;
 use App\Models\WalletTransaction;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ class AdminDashboardController extends Controller
             'active_users' => User::where('is_active', true)->count(),
             'matches' => MatchGame::count(),
             'active_matches' => MatchGame::where('status', 'active')->count(),
-            'pending_funding_requests' => WalletFundingRequest::where('status', 'pending')->count(),
+            'pending_funding_requests' => WalletConversation::where('status', 'open')->count(),
             'total_wagered' => (float) Bet::sum('amount'),
         ];
 
@@ -171,41 +172,108 @@ class AdminDashboardController extends Controller
 
     public function fundingRequests()
     {
-        $requests = WalletFundingRequest::with('user')->latest()->paginate(20);
-        return view('admin.funding_requests', compact('requests'));
+        $conversations = WalletConversation::with(['user', 'latestMessage.sender'])
+            ->latest('last_message_at')
+            ->paginate(20);
+        $selectedConversation = WalletConversation::with(['user', 'messages.sender'])
+            ->when(request()->integer('conversation'), function ($query, $conversationId) {
+                $query->whereKey($conversationId);
+            })
+            ->first()
+            ?? WalletConversation::with(['user', 'messages.sender'])->latest('last_message_at')->first();
+
+        return view('admin.funding_requests', compact('conversations', 'selectedConversation'));
     }
 
-    public function approveFunding(WalletFundingRequest $fundingRequest, WalletService $walletService)
+    public function walletConversationSummary(Request $request)
     {
-        if ($fundingRequest->status !== 'pending') {
-            return back()->with('error', 'Request already processed');
-        }
+        $conversations = WalletConversation::with(['user', 'latestMessage.sender'])
+            ->latest('last_message_at')
+            ->paginate(20);
 
-        DB::transaction(function () use ($fundingRequest, $walletService) {
-            $user = User::lockForUpdate()->findOrFail($fundingRequest->user_id);
-            $walletService->addFunds($user, (float) $fundingRequest->amount, 'deposit', 'Admin approved funding request');
+        return response()->json($this->conversationPaginator($conversations));
+    }
 
-            $fundingRequest->status = 'approved';
-            $fundingRequest->reviewed_by = auth()->id();
-            $fundingRequest->reviewed_at = now();
-            $fundingRequest->save();
+    public function walletConversationThread(WalletConversation $conversation)
+    {
+        return response()->json(
+            $this->conversationDetail($conversation->load(['user', 'messages.sender']))
+        );
+    }
+
+    public function replyFunding(Request $request, WalletConversation $conversation)
+    {
+        $data = $request->validate([
+            'body' => ['required', 'string', 'max:2000'],
+            'attachment' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+        ]);
+
+        DB::transaction(function () use ($request, $conversation, $data) {
+            $conversation = WalletConversation::lockForUpdate()->findOrFail($conversation->id);
+            $this->storeConversationMessage(
+                conversation: $conversation,
+                senderRole: 'admin',
+                senderUserId: $request->user()->id,
+                body: trim($data['body']),
+                attachment: $request->file('attachment')
+            );
         });
 
-        return back()->with('success', 'Funding request approved');
+        return back()->with('success', 'Reply sent');
     }
 
-    public function rejectFunding(WalletFundingRequest $fundingRequest)
+    public function approveFunding(Request $request, WalletConversation $conversation, WalletService $walletService)
     {
-        if ($fundingRequest->status !== 'pending') {
-            return back()->with('error', 'Request already processed');
+        if ($conversation->status !== 'open') {
+            return back()->with('error', 'Conversation already processed');
         }
 
-        $fundingRequest->status = 'rejected';
-        $fundingRequest->reviewed_by = auth()->id();
-        $fundingRequest->reviewed_at = now();
-        $fundingRequest->save();
+        DB::transaction(function () use ($request, $conversation, $walletService) {
+            $lockedConversation = WalletConversation::lockForUpdate()->findOrFail($conversation->id);
+            $user = User::lockForUpdate()->findOrFail($lockedConversation->user_id);
+            $amount = (float) ($lockedConversation->amount ?? 0);
 
-        return back()->with('success', 'Funding request rejected');
+            if ($amount <= 0) {
+                abort(422, 'This conversation does not include a funding amount');
+            }
+
+            $walletService->addFunds($user, $amount, 'deposit', 'Admin approved wallet funding message');
+            $lockedConversation->status = 'approved';
+            $lockedConversation->save();
+
+            $this->storeConversationMessage(
+                conversation: $lockedConversation,
+                senderRole: 'system',
+                senderUserId: null,
+                body: 'Funding approved. $'.number_format($amount, 2).' has been added to the wallet.',
+                attachment: null
+            );
+        });
+
+        return back()->with('success', 'Funding approved');
+    }
+
+    public function rejectFunding(Request $request, WalletConversation $conversation)
+    {
+        if ($conversation->status !== 'open') {
+            return back()->with('error', 'Conversation already processed');
+        }
+
+        DB::transaction(function () use ($request, $conversation) {
+            $lockedConversation = WalletConversation::lockForUpdate()->findOrFail($conversation->id);
+            $lockedConversation->status = 'rejected';
+            $lockedConversation->save();
+
+            $this->storeConversationMessage(
+                conversation: $lockedConversation,
+                senderRole: 'system',
+                senderUserId: null,
+                body: 'Funding request declined by admin.',
+                attachment: null
+            );
+        });
+
+        return back()->with('success', 'Funding rejected');
     }
 
     public function matches()
@@ -218,6 +286,108 @@ class AdminDashboardController extends Controller
     {
         $transactions = WalletTransaction::latest()->paginate(20);
         return view('admin.transactions', compact('transactions'));
+    }
+
+    private function storeConversationMessage(
+        WalletConversation $conversation,
+        string $senderRole,
+        ?int $senderUserId,
+        string $body,
+        $attachment
+    ): WalletMessage {
+        $attachmentData = [];
+        if ($attachment) {
+            $attachmentData = [
+                'attachment_path' => $attachment->store('wallet-messages', 'public'),
+                'attachment_name' => $attachment->getClientOriginalName(),
+                'attachment_mime' => $attachment->getClientMimeType(),
+            ];
+        }
+
+        $message = $conversation->messages()->create([
+            'sender_role' => $senderRole,
+            'sender_user_id' => $senderUserId,
+            'body' => $body,
+            ...$attachmentData,
+        ]);
+
+        $conversation->forceFill([
+            'last_message_at' => $message->created_at,
+        ])->saveQuietly();
+
+        return $message;
+    }
+
+    private function conversationDetail(WalletConversation $conversation): array
+    {
+        return [
+            'id' => $conversation->id,
+            'subject' => $conversation->subject,
+            'amount' => (float) ($conversation->amount ?? 0),
+            'status' => $conversation->status,
+            'last_message_at' => $conversation->last_message_at?->toISOString(),
+            'user' => [
+                'id' => $conversation->user?->id,
+                'name' => $conversation->user?->name,
+                'username' => $conversation->user?->username,
+            ],
+            'messages' => $conversation->messages
+                ->sortBy('created_at')
+                ->values()
+                ->map(fn (WalletMessage $message) => $this->messagePayload($message))
+                ->all(),
+        ];
+    }
+
+    private function conversationPaginator($paginator): array
+    {
+        return [
+            'data' => $paginator->getCollection()
+                ->map(fn (WalletConversation $conversation) => [
+                    'id' => $conversation->id,
+                    'subject' => $conversation->subject,
+                    'amount' => (float) ($conversation->amount ?? 0),
+                    'status' => $conversation->status,
+                    'last_message_at' => $conversation->last_message_at?->toISOString(),
+                    'user' => [
+                        'id' => $conversation->user?->id,
+                        'name' => $conversation->user?->name,
+                        'username' => $conversation->user?->username,
+                    ],
+                    'latest_message' => $conversation->latestMessage
+                        ? $this->messagePayload($conversation->latestMessage)
+                        : null,
+                ])
+                ->values()
+                ->all(),
+            'links' => $paginator->toArray()['links'] ?? [],
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'from' => $paginator->firstItem(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'to' => $paginator->lastItem(),
+                'total' => $paginator->total(),
+            ],
+        ];
+    }
+
+    private function messagePayload(WalletMessage $message): array
+    {
+        return [
+            'id' => $message->id,
+            'sender_role' => $message->sender_role,
+            'sender_user_id' => $message->sender_user_id,
+            'sender_name' => $message->sender?->name,
+            'sender_username' => $message->sender?->username,
+            'body' => $message->body,
+            'attachment_url' => $message->attachment_path
+                ? Storage::disk('public')->url($message->attachment_path)
+                : null,
+            'attachment_name' => $message->attachment_name,
+            'attachment_mime' => $message->attachment_mime,
+            'created_at' => $message->created_at?->toISOString(),
+        ];
     }
 
     private function validateUser(Request $request, ?User $user = null): array

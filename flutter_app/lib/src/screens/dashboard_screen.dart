@@ -17,6 +17,7 @@ import '../registered_user.dart';
 import '../services/api_client.dart';
 import 'profile_screen.dart';
 import 'network_chess_screen.dart';
+import 'wallet_messages_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
@@ -38,7 +39,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static const _pageTitles = [
     'Home',
     'Online Players',
-    'Wallet Funding',
+    'Wallet Messages',
     'Match Center',
     'Recent Matches',
   ];
@@ -60,9 +61,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _balance = 0;
   List<MatchSummary> _history = const [];
   List<RegisteredUser> _users = const [];
-
-  final _fundAmount = TextEditingController();
-  final _fundNote = TextEditingController();
   final _playerSearch = TextEditingController();
 
   @override
@@ -81,8 +79,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _presenceHeartbeat?.cancel();
     _challengePoller?.cancel();
     _playerSearch.removeListener(_handleSearchChanged);
-    _fundAmount.dispose();
-    _fundNote.dispose();
     _playerSearch.dispose();
     super.dispose();
   }
@@ -139,7 +135,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           IconButton(
             onPressed: () async {
               if (!widget.demoMode) {
-                await widget.apiClient.logout();
+                unawaited(widget.apiClient.logout());
               }
               widget.onLogout();
             },
@@ -414,24 +410,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildWalletPage() {
     return _buildPage('wallet', [
       SectionCard(
-        title: 'Request Wallet Funding',
+        title: 'Wallet Messages',
         icon: Icons.account_balance_wallet_outlined,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            DashboardInputField(
-              controller: _fundAmount,
-              label: 'Amount',
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-            DashboardInputField(
-              controller: _fundNote,
-              label: 'Note (optional)',
+            const Text(
+              'Send wallet funding requests as a message thread. Admin can reply and attach files back to you.',
+              style: TextStyle(color: AppColors.mutedText, height: 1.45),
             ),
             const SizedBox(height: 14),
             PrimaryActionButton(
-              label: 'Send Request',
-              onPressed: widget.demoMode ? _demoAction : _requestFunds,
+              label: 'Open wallet messages',
+              onPressed: widget.demoMode
+                  ? _demoAction
+                  : () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              WalletMessagesScreen(apiClient: widget.apiClient),
+                        ),
+                      );
+                    },
             ),
           ],
         ),
@@ -509,7 +509,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _syncPresenceHeartbeat();
       _syncChallengePolling();
     } catch (e) {
-      setState(() => _error = _friendlyError(e));
+      setState(() => _error = friendlyAppErrorMessage(e));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -577,25 +577,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ];
       _loading = false;
     });
-  }
-
-  Future<void> _requestFunds() async {
-    try {
-      final amount = double.parse(_fundAmount.text.trim());
-      final note = _fundNote.text.trim();
-      await widget.apiClient.requestFunds(
-        amount,
-        note: note.isEmpty ? null : note,
-      );
-      await _load();
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Funding request sent')));
-      }
-    } catch (e) {
-      setState(() => _error = _friendlyError(e));
-    }
   }
 
   void _demoAction() {
@@ -713,7 +694,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _error = _friendlyError(e));
+        setState(() => _error = friendlyAppErrorMessage(e));
       }
     } finally {
       betController.dispose();
@@ -831,7 +812,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         await _openNetworkMatch(active);
       }
     } catch (error) {
-      if (mounted) setState(() => _error = _friendlyError(error));
+      if (mounted) setState(() => _error = friendlyAppErrorMessage(error));
     } finally {
       if (mounted) await _pollMatches();
     }
@@ -924,7 +905,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     } catch (error) {
       if (mounted) {
-        setState(() => _error = _friendlyError(error));
+        setState(() => _error = friendlyAppErrorMessage(error));
       }
     } finally {
       if (mounted) setState(() => _updatingPresence = false);
@@ -955,10 +936,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) {
       setState(() {});
     }
-  }
-
-  String _friendlyError(Object error) {
-    return error.toString().replaceFirst('Exception: ', '');
   }
 }
 
@@ -1513,11 +1490,10 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
           ),
         );
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         setState(() {
-          _notice =
-              'Puzzle completed, but rating could not sync. Please try again.';
+          _notice = friendlyAppErrorMessage(error);
         });
       }
     } finally {
@@ -1617,10 +1593,10 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
           ),
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         setState(() {
-          _notice = 'You won, but your level could not sync. Please try again.';
+          _notice = friendlyAppErrorMessage(error);
         });
       }
       return;

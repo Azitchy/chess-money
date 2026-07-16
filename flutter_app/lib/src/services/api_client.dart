@@ -9,6 +9,32 @@ import '../registered_user.dart';
 import '../live_match.dart';
 import '../player_progress.dart';
 import '../user_profile.dart';
+import '../wallet_conversation.dart';
+
+String friendlyAppErrorMessage(Object error) {
+  final rawMessage = error.toString();
+  final message = rawMessage.replaceFirst('Exception: ', '').trim();
+  const recoveryHint =
+      ' If the issue continues, please logout and login again. Thank you!';
+
+  if (_isSessionError(error, message)) {
+    return 'Session expired. Please logout and login again. Thank you!';
+  }
+
+  if (_isTimeoutError(error, message)) {
+    return 'Request timed out. Please check your internet connection and try again.$recoveryHint';
+  }
+
+  if (_isConnectionError(message)) {
+    return 'Cannot reach the server. Please check the backend connection and try again.$recoveryHint';
+  }
+
+  if (message.isEmpty) {
+    return 'Something went wrong. Please try again.$recoveryHint';
+  }
+
+  return '$message$recoveryHint';
+}
 
 class ApiClient {
   ApiClient._(this._baseUrl, this._prefs);
@@ -42,9 +68,9 @@ class ApiClient {
       return 'http://127.0.0.1:8000/api';
     }
 
-    // Physical devices cannot reach the development computer through
-    // localhost. This is the computer's current Wi-Fi/LAN address.
-    return 'http://192.168.0.195:8000/api';
+    // USB-attached Android/iOS debug builds can use localhost when paired
+    // with adb reverse or equivalent port forwarding.
+    return 'http://127.0.0.1:8000/api';
   }
 
   static String? _normalizeSavedBaseUrl(String? baseUrl) {
@@ -53,16 +79,8 @@ class ApiClient {
     }
 
     final normalized = baseUrl.trim();
-    final staleLocalHosts = [
-      'http://10.0.2.2:8000/api',
-      'http://127.0.0.1:8000/api',
-      'http://localhost:8000/api',
-      // Previous development-machine address. Ignore it so existing installs
-      // migrate to the current default instead of keeping an unreachable URL.
-      'http://192.168.0.191:8000/api',
-    ];
-
-    if (staleLocalHosts.contains(normalized)) {
+    final uri = Uri.tryParse(normalized);
+    if (uri == null || _isLocalDevelopmentHost(uri)) {
       return null;
     }
 
@@ -144,11 +162,27 @@ class ApiClient {
   }
 
   Future<void> logout() async {
-    await http
-        .post(Uri.parse('$_baseUrl/logout'), headers: _headers)
-        .timeout(_requestTimeout);
+    final token = _token;
     _token = null;
     await _prefs.remove(_tokenKey);
+
+    if (token == null) {
+      return;
+    }
+
+    try {
+      await http
+          .post(
+            Uri.parse('$_baseUrl/logout'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(_requestTimeout);
+    } catch (_) {
+      // Logout should always complete locally even if the backend is slow.
+    }
   }
 
   Future<double> getWalletBalance() async {
@@ -306,11 +340,88 @@ class ApiClient {
         .post(
           Uri.parse('$_baseUrl/wallet/request-funds'),
           headers: _headers,
-          body: jsonEncode({'amount': amount, 'note': note}),
+          body: jsonEncode({'amount': amount, 'body': note}),
         )
         .timeout(_requestTimeout);
 
     _decode(response);
+  }
+
+  Future<List<WalletConversation>> getWalletConversations() async {
+    final response = await http
+        .get(Uri.parse('$_baseUrl/wallet/conversations'), headers: _headers)
+        .timeout(_requestTimeout);
+    final data = _decode(response);
+    return _conversationList(data['data']);
+  }
+
+  Future<WalletConversation> getWalletConversation(int conversationId) async {
+    final response = await http
+        .get(
+          Uri.parse('$_baseUrl/wallet/conversations/$conversationId'),
+          headers: _headers,
+        )
+        .timeout(_requestTimeout);
+    return WalletConversation.fromJson(_decode(response));
+  }
+
+  Future<WalletConversation> sendWalletConversationMessage(
+    int conversationId, {
+    String? body,
+    Uint8List? attachmentBytes,
+    String? attachmentFilename,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_baseUrl/wallet/conversations/$conversationId/reply'),
+    );
+    request.headers.addAll(_headers);
+    if (body != null && body.trim().isNotEmpty) {
+      request.fields['body'] = body.trim();
+    }
+    if (attachmentBytes != null) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'attachment',
+          attachmentBytes,
+          filename: attachmentFilename ?? 'attachment.jpg',
+        ),
+      );
+    }
+
+    final streamed = await request.send().timeout(_requestTimeout);
+    final response = await http.Response.fromStream(streamed);
+    return WalletConversation.fromJson(_decode(response));
+  }
+
+  Future<WalletConversation> createWalletConversation({
+    required double amount,
+    String? body,
+    Uint8List? attachmentBytes,
+    String? attachmentFilename,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_baseUrl/wallet/request-funds'),
+    );
+    request.headers.addAll(_headers);
+    request.fields['amount'] = amount.toString();
+    if (body != null && body.trim().isNotEmpty) {
+      request.fields['body'] = body.trim();
+    }
+    if (attachmentBytes != null) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'attachment',
+          attachmentBytes,
+          filename: attachmentFilename ?? 'attachment.jpg',
+        ),
+      );
+    }
+
+    final streamed = await request.send().timeout(_requestTimeout);
+    final response = await http.Response.fromStream(streamed);
+    return WalletConversation.fromJson(_decode(response));
   }
 
   Future<Map<String, dynamic>> createMatch({
@@ -408,6 +519,14 @@ class ApiClient {
         .toList(growable: false);
   }
 
+  List<WalletConversation> _conversationList(Object? value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map<String, dynamic>>()
+        .map(WalletConversation.fromJson)
+        .toList(growable: false);
+  }
+
   Future<Map<String, dynamic>> _handleAuthResponse(
     http.Response response, {
     required bool persistSession,
@@ -437,6 +556,13 @@ class ApiClient {
     }
 
     if (response.statusCode >= 400) {
+      if (response.statusCode == 401 ||
+          response.statusCode == 403 ||
+          response.statusCode == 419) {
+        throw Exception(
+          'Session expired. Please logout and login again. Thank you!',
+        );
+      }
       throw Exception(
         payload['message'] ?? 'Request failed (${response.statusCode})',
       );
@@ -458,4 +584,63 @@ class ApiClient {
 
     return message;
   }
+
+  static bool _isLocalDevelopmentHost(Uri uri) {
+    final host = uri.host.toLowerCase();
+    if (host.isEmpty || host == 'localhost' || host == '127.0.0.1') {
+      return true;
+    }
+
+    if (host == '10.0.2.2') {
+      return true;
+    }
+
+    final parts = host.split('.');
+    if (parts.length != 4) {
+      return false;
+    }
+
+    final octets = <int>[];
+    for (final part in parts) {
+      final value = int.tryParse(part);
+      if (value == null || value < 0 || value > 255) {
+        return false;
+      }
+      octets.add(value);
+    }
+
+    final first = octets[0];
+    final second = octets[1];
+    return first == 10 ||
+        (first == 172 && second >= 16 && second <= 31) ||
+        (first == 192 && second == 168);
+  }
+}
+
+bool _isSessionError(Object error, String message) {
+  final lower = message.toLowerCase();
+  return lower.contains('session expired') ||
+      lower.contains('unauthenticated') ||
+      lower.contains('unauthorized') ||
+      lower.contains('forbidden') ||
+      lower.contains('token') ||
+      lower.contains('login again') ||
+      lower.contains('401') ||
+      lower.contains('403') ||
+      lower.contains('419');
+}
+
+bool _isTimeoutError(Object error, String message) {
+  return error is TimeoutException ||
+      message.contains('TimeoutException') ||
+      message.contains('Future not completed');
+}
+
+bool _isConnectionError(String message) {
+  final lower = message.toLowerCase();
+  return lower.contains('socketexception') ||
+      lower.contains('connection refused') ||
+      lower.contains('connection timed out') ||
+      lower.contains('failed host lookup') ||
+      lower.contains('network is unreachable');
 }

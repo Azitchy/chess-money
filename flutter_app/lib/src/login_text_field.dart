@@ -9,6 +9,8 @@ class PillTextField extends StatelessWidget {
     required this.validator,
     this.keyboardType,
     this.obscureText = false,
+    this.suffixIcon,
+    this.onSuffixTap,
   });
 
   final TextEditingController controller;
@@ -17,6 +19,8 @@ class PillTextField extends StatelessWidget {
   final String? Function(String?) validator;
   final TextInputType? keyboardType;
   final bool obscureText;
+  final Widget? suffixIcon;
+  final VoidCallback? onSuffixTap;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +36,26 @@ class PillTextField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: label,
         prefixIcon: Icon(icon, color: const Color(0xFF5D8FDE)),
+        suffixIcon: suffixIcon == null
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: Material(
+                  color: const Color(0xFFEAF2FF),
+                  shape: const StadiumBorder(),
+                  child: InkWell(
+                    customBorder: const StadiumBorder(),
+                    onTap: onSuffixTap,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      child: suffixIcon,
+                    ),
+                  ),
+                ),
+              ),
         filled: true,
         fillColor: const Color(0xFFF4F8FF),
         contentPadding: const EdgeInsets.symmetric(

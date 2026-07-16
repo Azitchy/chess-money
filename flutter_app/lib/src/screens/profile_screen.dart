@@ -275,7 +275,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = _friendlyError(error);
+        _error = friendlyAppErrorMessage(error);
       });
     }
   }
@@ -302,7 +302,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     } catch (error) {
       if (mounted) {
-        setState(() => _error = _friendlyError(error));
+        setState(() => _error = friendlyAppErrorMessage(error));
       }
     }
   }
@@ -357,7 +357,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     } catch (error) {
       if (mounted) {
-        setState(() => _error = _friendlyError(error));
+        setState(() => _error = friendlyAppErrorMessage(error));
       }
     } finally {
       if (mounted) {
@@ -385,10 +385,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return 'Enter a valid email address';
     }
     return null;
-  }
-
-  String _friendlyError(Object error) {
-    return error.toString().replaceFirst('Exception: ', '');
   }
 }
 

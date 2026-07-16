@@ -218,7 +218,7 @@ class _NetworkChessScreenState extends State<NetworkChessScreen> {
       }
       await _settleIfFinished();
     } catch (error) {
-      if (mounted) setState(() => _error = _friendlyError(error));
+      if (mounted) setState(() => _error = friendlyAppErrorMessage(error));
     }
   }
 
@@ -277,7 +277,7 @@ class _NetworkChessScreenState extends State<NetworkChessScreen> {
       });
       await _settleIfFinished();
     } catch (error) {
-      if (mounted) setState(() => _error = _friendlyError(error));
+      if (mounted) setState(() => _error = friendlyAppErrorMessage(error));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -330,7 +330,10 @@ class _NetworkChessScreenState extends State<NetworkChessScreen> {
         ),
       );
       if (mounted) Navigator.of(context).pop(true);
-    } catch (_) {
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = friendlyAppErrorMessage(error));
+      }
       await _refresh();
       if (_match.status == 'completed' && mounted) {
         Navigator.of(context).pop(true);
@@ -372,6 +375,3 @@ class _NetworkChessScreenState extends State<NetworkChessScreen> {
     if (mounted) Navigator.of(context).pop(true);
   }
 }
-
-String _friendlyError(Object error) =>
-    error.toString().replaceFirst('Exception: ', '');

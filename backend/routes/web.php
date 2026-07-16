@@ -25,8 +25,11 @@ Route::middleware(['auth', 'admin.web'])->prefix('admin')->group(function () {
     Route::get('/users/{user}/wallet', [AdminDashboardController::class, 'walletForm'])->name('admin.users.wallet.form');
     Route::post('/users/{user}/wallet', [AdminDashboardController::class, 'walletAdjust'])->name('admin.users.wallet.adjust');
     Route::get('/funding-requests', [AdminDashboardController::class, 'fundingRequests'])->name('admin.funding-requests');
-    Route::post('/funding-requests/{fundingRequest}/approve', [AdminDashboardController::class, 'approveFunding'])->name('admin.funding-requests.approve');
-    Route::post('/funding-requests/{fundingRequest}/reject', [AdminDashboardController::class, 'rejectFunding'])->name('admin.funding-requests.reject');
+    Route::get('/funding-requests/summary', [AdminDashboardController::class, 'walletConversationSummary'])->name('admin.funding-requests.summary');
+    Route::get('/funding-requests/{conversation}', [AdminDashboardController::class, 'walletConversationThread'])->name('admin.funding-requests.thread');
+    Route::post('/funding-requests/{conversation}/reply', [AdminDashboardController::class, 'replyFunding'])->name('admin.funding-requests.reply');
+    Route::post('/funding-requests/{conversation}/approve', [AdminDashboardController::class, 'approveFunding'])->name('admin.funding-requests.approve');
+    Route::post('/funding-requests/{conversation}/reject', [AdminDashboardController::class, 'rejectFunding'])->name('admin.funding-requests.reject');
     Route::get('/matches', [AdminDashboardController::class, 'matches'])->name('admin.matches');
     Route::get('/transactions', [AdminDashboardController::class, 'transactions'])->name('admin.transactions');
 });

@@ -30,6 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _registerMode = false;
   bool _rememberMe = true;
   bool _loading = false;
+  bool _obscurePassword = true;
   String? _error;
 
   @override
@@ -140,8 +141,20 @@ class _LoginScreenState extends State<LoginScreen> {
                                 controller: _password,
                                 label: 'Password',
                                 icon: Icons.lock_outline,
-                                obscureText: true,
+                                obscureText: _obscurePassword,
                                 validator: _required,
+                                suffixIcon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                  size: 20,
+                                  color: const Color(0xFF5D8FDE),
+                                ),
+                                onSuffixTap: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
                               ),
                               const SizedBox(height: 12),
                               if (!_registerMode)
@@ -328,7 +341,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       widget.onLogin();
     } catch (e) {
-      setState(() => _error = _friendlyError(e));
+      setState(() => _error = friendlyAppErrorMessage(e));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -344,8 +357,4 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String? _required(String? value) =>
       (value == null || value.trim().isEmpty) ? 'Required' : null;
-
-  String _friendlyError(Object error) {
-    return error.toString().replaceFirst('Exception: ', '');
-  }
 }

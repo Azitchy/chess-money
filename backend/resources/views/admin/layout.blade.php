@@ -128,7 +128,7 @@
       <nav class="menu">
         <a class="{{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" href="{{ route('admin.dashboard') }}">Dashboard</a>
         <a class="{{ request()->routeIs('admin.users*') ? 'active' : '' }}" href="{{ route('admin.users') }}">Users</a>
-        <a class="{{ request()->routeIs('admin.funding-requests*') ? 'active' : '' }}" href="{{ route('admin.funding-requests') }}">Funding Requests</a>
+        <a class="{{ request()->routeIs('admin.funding-requests*') ? 'active' : '' }}" href="{{ route('admin.funding-requests') }}">Wallet Messages</a>
         <a class="{{ request()->routeIs('admin.matches*') ? 'active' : '' }}" href="{{ route('admin.matches') }}">Matches</a>
         <a class="{{ request()->routeIs('admin.transactions*') ? 'active' : '' }}" href="{{ route('admin.transactions') }}">Transactions</a>
       </nav>
