@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../platform_notification.dart';
 import '../registered_user.dart';
 import '../live_match.dart';
 import '../player_progress.dart';
@@ -15,25 +16,25 @@ String friendlyAppErrorMessage(Object error) {
   final rawMessage = error.toString();
   final message = rawMessage.replaceFirst('Exception: ', '').trim();
   const recoveryHint =
-      ' If the issue continues, please logout and login again. Thank you!';
+      ' Please try logout and login again if it keeps happening. Thank you!';
 
   if (_isSessionError(error, message)) {
     return 'Session expired. Please logout and login again. Thank you!';
   }
 
   if (_isTimeoutError(error, message)) {
-    return 'Request timed out. Please check your internet connection and try again.$recoveryHint';
+    return 'Something took too long. Please try again.$recoveryHint';
   }
 
   if (_isConnectionError(message)) {
-    return 'Cannot reach the server. Please check the backend connection and try again.$recoveryHint';
+    return 'We could not complete your request. Please try again.$recoveryHint';
   }
 
   if (message.isEmpty) {
     return 'Something went wrong. Please try again.$recoveryHint';
   }
 
-  return '$message$recoveryHint';
+  return 'Something went wrong. Please try again.$recoveryHint';
 }
 
 class ApiClient {
@@ -89,11 +90,22 @@ class ApiClient {
 
   bool get isLoggedIn => _token != null;
   String get baseUrl => _baseUrl;
+  String get notificationSocketUrl {
+    const overrideSocketUrl = String.fromEnvironment('NOTIFICATION_WS_URL');
+    if (overrideSocketUrl.isNotEmpty) {
+      return overrideSocketUrl;
+    }
+
+    final apiUri = Uri.parse(_baseUrl);
+    final host = apiUri.host.isEmpty ? '127.0.0.1' : apiUri.host;
+    final scheme = apiUri.scheme == 'https' ? 'wss' : 'ws';
+    return '$scheme://$host:8081';
+  }
 
   Future<void> setBaseUrl(String baseUrl) async {
     final normalized = baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
     if (normalized.isEmpty) {
-      throw Exception('Backend URL cannot be empty');
+      throw Exception('Something went wrong. Please try again.');
     }
 
     _baseUrl = normalized.endsWith('/api') ? normalized : '$normalized/api';
@@ -249,6 +261,30 @@ class ApiClient {
           (json) =>
               RegisteredUser.fromJson(json, resolveAvatarUrl: resolveMediaUrl),
         )
+        .toList(growable: false);
+  }
+
+  Future<List<PlatformNotificationItem>> getPlatformNotifications() async {
+    final response = await http
+        .get(Uri.parse('$_baseUrl/notifications'), headers: _headers)
+        .timeout(_requestTimeout);
+    final data = _decode(response);
+    final notifications = data['data'] as List<dynamic>;
+    return notifications
+        .whereType<Map<String, dynamic>>()
+        .map(PlatformNotificationItem.fromJson)
+        .toList(growable: false);
+  }
+
+  Future<List<PlatformNotificationItem>> markPlatformNotificationsSeen() async {
+    final response = await http
+        .post(Uri.parse('$_baseUrl/notifications/mark-seen'), headers: _headers)
+        .timeout(_requestTimeout);
+    final data = _decode(response);
+    final notifications = data['data'] as List<dynamic>;
+    return notifications
+        .whereType<Map<String, dynamic>>()
+        .map(PlatformNotificationItem.fromJson)
         .toList(growable: false);
   }
 
@@ -570,9 +606,7 @@ class ApiClient {
           : jsonDecode(response.body) as Map<String, dynamic>;
     } catch (_) {
       payload = <String, dynamic>{
-        'message': response.body.isEmpty
-            ? 'Request failed (${response.statusCode})'
-            : response.body,
+        'message': 'Something went wrong. Please try again.',
       };
     }
 
@@ -584,26 +618,24 @@ class ApiClient {
           'Session expired. Please logout and login again. Thank you!',
         );
       }
-      throw Exception(
-        payload['message'] ?? 'Request failed (${response.statusCode})',
-      );
+      throw Exception('Something went wrong. Please try again.');
     }
     return payload;
   }
 
   String _friendlyNetworkMessage(Object error) {
     if (error is TimeoutException) {
-      return 'Request timed out while contacting the API at $_baseUrl. Check the backend server and network connection.';
+      return 'Something took too long. Please try again later.';
     }
 
     final message = error.toString();
     if (message.contains('SocketException') ||
         message.contains('Connection refused') ||
         message.contains('Connection timed out')) {
-      return 'Cannot reach the API at $_baseUrl. Make sure the backend server is running and the device can access that address.';
+      return 'We could not connect right now. Please try again later.';
     }
 
-    return message;
+    return 'Something went wrong. Please try again.';
   }
 
   static bool _isLocalDevelopmentHost(Uri uri) {

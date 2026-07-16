@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:chess/chess.dart' as chess;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../app_colors.dart';
 import '../bot_move_engine.dart';
@@ -13,6 +15,7 @@ import '../dashboard_widgets.dart';
 import '../interactive_chess_board.dart';
 import '../live_match.dart';
 import '../match_summary.dart';
+import '../platform_notification.dart';
 import '../registered_user.dart';
 import '../services/api_client.dart';
 import 'profile_screen.dart';
@@ -39,7 +42,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static const _pageTitles = [
     'Home',
     'Online Players',
-    'Wallet Messages',
+    'Load Balance',
     'Match Center',
     'Recent Matches',
   ];
@@ -54,6 +57,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _rating = 0;
   int _level = 0;
   List<LiveMatch> _challenges = const [];
+  List<PlatformNotificationItem> _platformNotifications = const [];
   final Set<int> _announcedChallenges = {};
   final Set<int> _openedMatches = {};
   int _selectedIndex = 0;
@@ -61,6 +65,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _balance = 0;
   List<MatchSummary> _history = const [];
   List<RegisteredUser> _users = const [];
+  int _notificationUnreadCount = 0;
+  WebSocketChannel? _notificationChannel;
+  StreamSubscription? _notificationSubscription;
+  Timer? _notificationReconnectTimer;
+  bool _notificationSocketConnecting = false;
   final _playerSearch = TextEditingController();
 
   @override
@@ -78,6 +87,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void dispose() {
     _presenceHeartbeat?.cancel();
     _challengePoller?.cancel();
+    _notificationReconnectTimer?.cancel();
+    _notificationSubscription?.cancel();
+    _notificationChannel?.sink.close();
     _playerSearch.removeListener(_handleSearchChanged);
     _playerSearch.dispose();
     super.dispose();
@@ -114,6 +126,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 tooltip: 'Match challenges',
                 onPressed: _showChallengeInbox,
                 icon: const Icon(Icons.notifications_outlined),
+                color: AppColors.deepPurple,
+              ),
+            ),
+          if (!widget.demoMode)
+            Badge(
+              isLabelVisible: _notificationUnreadCount > 0,
+              label: Text('$_notificationUnreadCount'),
+              child: IconButton(
+                tooltip: 'Admin notifications',
+                onPressed: _showPlatformNotifications,
+                icon: const Icon(Icons.campaign_outlined),
                 color: AppColors.deepPurple,
               ),
             ),
@@ -410,13 +433,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildWalletPage() {
     return _buildPage('wallet', [
       SectionCard(
-        title: 'Wallet Requests',
+        title: 'Load Balance Requests',
         icon: Icons.account_balance_wallet_outlined,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Send funding or withdrawal requests as message threads. Admin can reply and attach files back to you.',
+              'Send load balance or withdrawal requests as message threads. Admin can reply and attach files back to you.',
               style: TextStyle(color: AppColors.mutedText, height: 1.45),
             ),
             const SizedBox(height: 14),
@@ -424,7 +447,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Expanded(
                   child: PrimaryActionButton(
-                    label: 'Funding',
+                    label: 'Load Balance',
                     onPressed: widget.demoMode
                         ? _demoAction
                         : () => _openWalletMessages('funding'),
@@ -512,6 +535,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final progress = await widget.apiClient.getPlayerProgress();
       final history = await widget.apiClient.getMatchHistory();
       final users = await widget.apiClient.getUsers();
+      final notifications = await widget.apiClient.getPlatformNotifications();
       final isOnline = await widget.apiClient.getPresence();
       setState(() {
         _balance = balance;
@@ -523,10 +547,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             .map(MatchSummary.fromJson)
             .toList(growable: false);
         _users = users;
+        _platformNotifications = notifications;
+        _notificationUnreadCount = notifications
+            .where((item) => !item.isRead)
+            .length;
         _isOnline = isOnline;
       });
       _syncPresenceHeartbeat();
       _syncChallengePolling();
+      _syncNotificationSocket();
     } catch (e) {
       setState(() => _error = friendlyAppErrorMessage(e));
     } finally {
@@ -594,6 +623,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           lastSeenAt: DateTime.now().subtract(const Duration(minutes: 15)),
         ),
       ];
+      _platformNotifications = const [];
+      _notificationUnreadCount = 0;
       _loading = false;
     });
   }
@@ -762,6 +793,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _pollMatches());
   }
 
+  void _syncNotificationSocket() {
+    _notificationReconnectTimer?.cancel();
+    if (widget.demoMode || !_isOnline) {
+      _disconnectNotificationSocket();
+      return;
+    }
+    _connectNotificationSocket();
+  }
+
+  void _connectNotificationSocket() {
+    if (_notificationSocketConnecting || widget.demoMode || !_isOnline) {
+      return;
+    }
+
+    _notificationSocketConnecting = true;
+    try {
+      _notificationSubscription?.cancel();
+      _notificationSubscription = null;
+      _notificationChannel?.sink.close();
+
+      final channel = WebSocketChannel.connect(
+        Uri.parse(widget.apiClient.notificationSocketUrl),
+      );
+      _notificationChannel = channel;
+      _notificationSubscription = channel.stream.listen(
+        _handleNotificationSocketEvent,
+        onError: (_) => _scheduleNotificationReconnect(),
+        onDone: _scheduleNotificationReconnect,
+      );
+    } catch (_) {
+      _scheduleNotificationReconnect();
+    } finally {
+      _notificationSocketConnecting = false;
+    }
+  }
+
+  void _disconnectNotificationSocket() {
+    _notificationReconnectTimer?.cancel();
+    _notificationReconnectTimer = null;
+    _notificationSubscription?.cancel();
+    _notificationSubscription = null;
+    _notificationChannel?.sink.close();
+    _notificationChannel = null;
+  }
+
+  void _scheduleNotificationReconnect() {
+    if (!mounted || widget.demoMode || !_isOnline) {
+      return;
+    }
+
+    _notificationReconnectTimer?.cancel();
+    _notificationReconnectTimer = Timer(
+      const Duration(seconds: 5),
+      _connectNotificationSocket,
+    );
+  }
+
   Future<void> _pollMatches() async {
     if (_pollingMatches || !mounted || widget.demoMode) return;
     _pollingMatches = true;
@@ -793,6 +881,89 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _reloadNotificationsFromApi() async {
+    if (widget.demoMode) return;
+    final notifications = await widget.apiClient.getPlatformNotifications();
+    if (!mounted) return;
+    setState(() {
+      _platformNotifications = notifications;
+      _notificationUnreadCount = notifications
+          .where((item) => !item.isRead)
+          .length;
+    });
+  }
+
+  void _handleNotificationSocketEvent(dynamic event) {
+    if (!mounted) return;
+
+    try {
+      final payload = event is String ? jsonDecode(event) : event;
+      if (payload is! Map<String, dynamic>) return;
+
+      final eventName = payload['event']?.toString() ?? '';
+      if (eventName == 'notification.deleted') {
+        final deletedId = int.tryParse(payload['id']?.toString() ?? '');
+        if (deletedId == null) return;
+        setState(() {
+          _platformNotifications = _platformNotifications
+              .where((item) => item.id != deletedId)
+              .toList(growable: false);
+          _notificationUnreadCount = _platformNotifications
+              .where((item) => !item.isRead)
+              .length;
+        });
+        return;
+      }
+
+      final rawNotification = payload['notification'];
+      if (rawNotification is! Map<String, dynamic>) return;
+      final currentItem = PlatformNotificationItem.fromJson(rawNotification);
+      if (!currentItem.isActive) {
+        setState(() {
+          _platformNotifications = _platformNotifications
+              .where((item) => item.id != currentItem.id)
+              .toList(growable: false);
+          _notificationUnreadCount = _platformNotifications
+              .where((item) => !item.isRead)
+              .length;
+        });
+        return;
+      }
+
+      final existingIndex = _platformNotifications.indexWhere(
+        (item) => item.id == currentItem.id,
+      );
+      final nextItem = PlatformNotificationItem(
+        id: currentItem.id,
+        noticeType: currentItem.noticeType,
+        title: currentItem.title,
+        body: currentItem.body,
+        actionLabel: currentItem.actionLabel,
+        actionUrl: currentItem.actionUrl,
+        isActive: currentItem.isActive,
+        isRead: existingIndex >= 0
+            ? _platformNotifications[existingIndex].isRead
+            : false,
+        createdAt: currentItem.createdAt,
+      );
+
+      setState(() {
+        final nextNotifications = [..._platformNotifications];
+        if (existingIndex >= 0) {
+          nextNotifications[existingIndex] = nextItem;
+        } else {
+          nextNotifications.insert(0, nextItem);
+        }
+        _platformNotifications = nextNotifications;
+        _notificationUnreadCount = nextNotifications
+            .where((item) => !item.isRead)
+            .length;
+      });
+    } catch (_) {
+      // Ignore malformed websocket messages and keep the socket alive.
+    }
+  }
+
   Future<void> _showChallengeInbox() async {
     await _pollMatches();
     if (!mounted) return;
@@ -803,6 +974,190 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
     await _showIncomingChallenge(_challenges.first);
+  }
+
+  Future<void> _showPlatformNotifications() async {
+    if (widget.demoMode) {
+      _demoAction();
+      return;
+    }
+
+    if (_platformNotifications.isEmpty) {
+      await _reloadNotificationsFromApi();
+    }
+    if (!mounted) return;
+
+    final currentNotifications = _platformNotifications;
+    if (currentNotifications.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No admin notifications yet.')),
+      );
+      return;
+    }
+
+    final seenNotifications = await widget.apiClient
+        .markPlatformNotificationsSeen();
+    if (!mounted) return;
+    setState(() {
+      _platformNotifications = seenNotifications;
+      _notificationUnreadCount = 0;
+    });
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Admin Notifications',
+                  style: TextStyle(
+                    color: AppColors.heading,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Announcements, offers, and messages from admin appear here in real time.',
+                  style: TextStyle(
+                    color: AppColors.mutedText,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.65,
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: currentNotifications.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final item = currentNotifications[index];
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: () async {
+                          Navigator.of(sheetContext).pop();
+                          _handleNotificationAction(item);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: item.isRead
+                                ? const Color(0xFFF8FAFC)
+                                : const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0xFFDDE9FF)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  _StatusChip(
+                                    label: item.noticeType.toUpperCase(),
+                                    background: const Color(0xFFE8FFF2),
+                                    foreground: const Color(0xFF16794C),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      item.title,
+                                      style: const TextStyle(
+                                        color: AppColors.heading,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                item.body,
+                                style: const TextStyle(
+                                  color: AppColors.heading,
+                                  height: 1.35,
+                                ),
+                              ),
+                              if (item.actionLabel != null ||
+                                  item.actionUrl != null) ...[
+                                const SizedBox(height: 10),
+                                Text(
+                                  [
+                                    if (item.actionLabel != null)
+                                      item.actionLabel,
+                                    if (item.actionUrl != null) item.actionUrl,
+                                  ].whereType<String>().join(' • '),
+                                  style: const TextStyle(
+                                    color: AppColors.deepPurple,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleNotificationAction(PlatformNotificationItem item) async {
+    final actionUrl = item.actionUrl?.trim();
+    if (actionUrl == null || actionUrl.isEmpty) {
+      return;
+    }
+
+    if (actionUrl.startsWith('app://wallet/load-balance')) {
+      _openWalletMessages('funding');
+      return;
+    }
+
+    if (actionUrl.startsWith('app://wallet/withdraw')) {
+      _openWalletMessages('withdrawal');
+      return;
+    }
+
+    if (actionUrl.startsWith('app://players')) {
+      if (mounted) {
+        setState(() => _selectedIndex = 1);
+      }
+      return;
+    }
+
+    if (actionUrl.startsWith('app://match')) {
+      if (mounted) {
+        setState(() => _selectedIndex = 3);
+      }
+      return;
+    }
+
+    if (actionUrl.startsWith('app://home')) {
+      if (mounted) {
+        setState(() => _selectedIndex = 0);
+      }
+    }
   }
 
   Future<void> _showIncomingChallenge(LiveMatch match) async {
@@ -949,6 +1304,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
       _syncPresenceHeartbeat();
       _syncChallengePolling();
+      _syncNotificationSocket();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(updated ? 'You are now online' : 'You are now offline'),
@@ -2505,6 +2861,37 @@ class _ChallengeDetail extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({
+    required this.label,
+    required this.background,
+    required this.foreground,
+  });
+
+  final String label;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: foreground,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }

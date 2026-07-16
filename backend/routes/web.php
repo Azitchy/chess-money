@@ -16,6 +16,9 @@ Route::get('/login', fn () => redirect()->route('admin.login'))->name('login');
 Route::middleware(['auth', 'admin.web'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
     Route::post('/settings/commission', [AdminDashboardController::class, 'updateCommission'])->name('admin.settings.commission');
+    Route::post('/notifications', [AdminDashboardController::class, 'storeNotification'])->name('admin.notifications.store');
+    Route::put('/notifications/{notification}', [AdminDashboardController::class, 'updateNotification'])->name('admin.notifications.update');
+    Route::delete('/notifications/{notification}', [AdminDashboardController::class, 'deleteNotification'])->name('admin.notifications.delete');
     Route::get('/users', [AdminDashboardController::class, 'users'])->name('admin.users');
     Route::get('/users/create', [AdminDashboardController::class, 'createUser'])->name('admin.users.create');
     Route::post('/users', [AdminDashboardController::class, 'storeUser'])->name('admin.users.store');

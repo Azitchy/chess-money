@@ -52,6 +52,7 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'is_online' => 'boolean',
             'last_seen_at' => 'datetime',
+            'last_notification_seen_at' => 'datetime',
         ];
     }
 

@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Bet;
 use App\Models\PlatformSetting;
+use App\Models\PlatformNotification;
 use App\Models\MatchGame;
 use App\Models\User;
 use App\Models\WalletConversation;
 use App\Models\WalletMessage;
 use App\Models\WalletTransaction;
+use App\Services\NotificationBroadcaster;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,8 +32,20 @@ class AdminDashboardController extends Controller
         ];
 
         $commissionPercent = (float) PlatformSetting::getValue('match_commission_percent', 10);
+        $recentNotifications = PlatformNotification::query()
+            ->latest()
+            ->limit(8)
+            ->get();
+        $editingNotification = null;
+        $editingId = (int) request()->query('notification');
+        if ($editingId > 0) {
+            $editingNotification = PlatformNotification::find($editingId);
+        }
 
-        return view('admin.dashboard', compact('stats', 'commissionPercent'));
+        return view(
+            'admin.dashboard',
+            compact('stats', 'commissionPercent', 'recentNotifications', 'editingNotification')
+        );
     }
 
     public function updateCommission(Request $request)
@@ -43,6 +57,73 @@ class AdminDashboardController extends Controller
         PlatformSetting::setValue('match_commission_percent', $data['commission_percent']);
 
         return back()->with('success', 'Match commission updated');
+    }
+
+    public function storeNotification(Request $request, NotificationBroadcaster $broadcaster)
+    {
+        $data = $request->validate([
+            'notice_type' => ['required', Rule::in(['offer', 'message', 'update', 'alert'])],
+            'title' => ['required', 'string', 'max:120'],
+            'body' => ['required', 'string', 'max:2000'],
+            'action_label' => ['nullable', 'string', 'max:80'],
+            'action_url' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $notification = PlatformNotification::create([
+            'created_by_user_id' => $request->user()->id,
+            'notice_type' => $data['notice_type'],
+            'title' => $data['title'],
+            'body' => $data['body'],
+            'action_label' => $data['action_label'] ?? null,
+            'action_url' => $data['action_url'] ?? null,
+            'is_active' => true,
+        ]);
+
+        $broadcaster->created($notification);
+
+        return back()->with('success', 'Notification sent to users');
+    }
+
+    public function updateNotification(
+        Request $request,
+        PlatformNotification $notification,
+        NotificationBroadcaster $broadcaster
+    ) {
+        $data = $request->validate([
+            'notice_type' => ['required', Rule::in(['offer', 'message', 'update', 'alert'])],
+            'title' => ['required', 'string', 'max:120'],
+            'body' => ['required', 'string', 'max:2000'],
+            'action_label' => ['nullable', 'string', 'max:80'],
+            'action_url' => ['nullable', 'string', 'max:255'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        $notification->fill([
+            'notice_type' => $data['notice_type'],
+            'title' => $data['title'],
+            'body' => $data['body'],
+            'action_label' => $data['action_label'] ?? null,
+            'action_url' => $data['action_url'] ?? null,
+            'is_active' => $request->boolean('is_active'),
+        ])->save();
+
+        $broadcaster->updated($notification->fresh());
+
+        return redirect()
+            ->route('admin.dashboard', ['notification' => $notification->id])
+            ->with('success', 'Notification updated');
+    }
+
+    public function deleteNotification(
+        Request $request,
+        PlatformNotification $notification,
+        NotificationBroadcaster $broadcaster
+    ) {
+        $notificationId = $notification->id;
+        $notification->delete();
+        $broadcaster->deleted($notificationId);
+
+        return back()->with('success', 'Notification deleted');
     }
 
     public function users(Request $request)

@@ -4,14 +4,14 @@
 @php
   $selectedId = $selectedConversation?->id;
   $isWithdrawal = ($requestType ?? 'funding') === 'withdrawal';
-  $pageTitle = $isWithdrawal ? 'Withdraw Requests' : 'Wallet Messages';
+  $pageTitle = $isWithdrawal ? 'Withdraw Requests' : 'Load Balance Requests';
   $pageCrumb = $isWithdrawal ? 'Admin / Withdrawal Inbox' : 'Admin / Wallet Support Inbox';
   $replyRoute = $isWithdrawal ? 'admin.withdraw-requests.reply' : 'admin.funding-requests.reply';
   $approveRoute = $isWithdrawal ? 'admin.withdraw-requests.approve' : 'admin.funding-requests.approve';
   $rejectRoute = $isWithdrawal ? 'admin.withdraw-requests.reject' : 'admin.funding-requests.reject';
   $threadRoute = $isWithdrawal ? 'admin.withdraw-requests.thread' : 'admin.funding-requests.thread';
   $emptyText = $isWithdrawal ? 'No withdraw requests yet.' : 'No wallet messages yet.';
-  $approveLabel = $isWithdrawal ? 'Approve Withdrawal' : 'Approve Funding';
+  $approveLabel = $isWithdrawal ? 'Approve Withdrawal' : 'Approve Load Balance';
 @endphp
 
 <div class="content-header">
@@ -37,7 +37,7 @@
               {{ ucfirst($conversation->status) }}
             </span>
           </div>
-          <div style="margin-top:4px;color:#475569">Type: {{ ucfirst($conversation->conversation_type ?? 'funding') }}</div>
+          <div style="margin-top:4px;color:#475569">Type: {{ $conversation->conversation_type === 'withdrawal' ? 'Withdrawal' : 'Load Balance' }}</div>
           <div style="margin-top:4px;color:#475569">User: {{ $conversation->user?->name }} @{{ $conversation->user?->username }}</div>
           <div style="margin-top:4px;color:#64748b;font-size:13px">
             Amount: ${{ number_format((float) $conversation->amount, 2) }}

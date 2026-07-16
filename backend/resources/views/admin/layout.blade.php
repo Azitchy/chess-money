@@ -138,6 +138,11 @@
         <a href="#">Reports</a>
         <a href="#">Fraud Signals</a>
       </nav>
+      <div class="menu-title">Dashboard Sections</div>
+      <nav class="menu">
+        <a href="{{ route('admin.dashboard') }}#admin-send-notification">Send Notification</a>
+        <a href="{{ route('admin.dashboard') }}#admin-match-commission">Match Commission</a>
+      </nav>
     </aside>
     <main class="main">
       <header class="topbar">

@@ -68,7 +68,7 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
         title: Text(
           _requestType == 'withdrawal'
               ? 'Withdraw Requests'
-              : 'Wallet Messages',
+              : 'Load Balance Requests',
           style: const TextStyle(
             color: AppColors.heading,
             fontWeight: FontWeight.w800,
@@ -106,7 +106,7 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
   Widget _buildNewRequestCard() {
     final isWithdrawal = _requestType == 'withdrawal';
     return SectionCard(
-      title: isWithdrawal ? 'Request a withdrawal' : 'Start a wallet request',
+      title: isWithdrawal ? 'Request a withdrawal' : 'Request load balance',
       icon: Icons.request_page_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -175,7 +175,7 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
                   child: Text(
                     isWithdrawal
                         ? 'No withdraw requests yet.'
-                        : 'No wallet messages yet.',
+                        : 'No load balance requests yet.',
                   ),
                 ),
               ]
@@ -728,7 +728,7 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
       children: const [
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 10),
-          child: Text('Funding'),
+          child: Text('Load Balance'),
         ),
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 10),
@@ -760,7 +760,7 @@ class _IntroCard extends StatelessWidget {
       child: Text(
         isWithdrawal
             ? 'Request a withdrawal as a message thread. Keep the chat open, attach a photo if needed, and let admin reply right here.'
-            : 'Send funding requests as messages, keep the thread open, and let admin reply right here. You can attach a photo from gallery or camera.',
+            : 'Send load balance requests as messages, keep the thread open, and let admin reply right here. You can attach a photo from gallery or camera.',
         style: const TextStyle(
           color: Colors.white,
           height: 1.4,
