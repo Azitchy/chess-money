@@ -49,13 +49,22 @@ class AvatarBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 120,
-      height: 120,
-      decoration: const BoxDecoration(
-        color: Color(0xFF44A7F5),
+      width: 132,
+      height: 132,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.82),
         shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFFBFD7FF)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 24,
+            offset: Offset(0, 12),
+          ),
+        ],
       ),
-      child: const Icon(Icons.person, size: 68, color: Colors.white),
+      child: Image.asset('lib/src/assets/logo.png', fit: BoxFit.contain),
     );
   }
 }

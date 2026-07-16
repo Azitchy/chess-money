@@ -21,11 +21,17 @@ class ChessMoneyApp extends StatefulWidget {
 
 class _ChessMoneyAppState extends State<ChessMoneyApp> {
   late bool _isAuthenticated;
+  bool _showSplash = true;
 
   @override
   void initState() {
     super.initState();
     _isAuthenticated = widget.apiClient.isLoggedIn;
+    Future<void>.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) {
+        setState(() => _showSplash = false);
+      }
+    });
   }
 
   @override
@@ -38,7 +44,9 @@ class _ChessMoneyAppState extends State<ChessMoneyApp> {
         scaffoldBackgroundColor: AppColors.pageBackground,
         useMaterial3: true,
       ),
-      home: _isAuthenticated
+      home: _showSplash
+          ? const _StartupSplashScreen()
+          : _isAuthenticated
           ? DashboardScreen(
               apiClient: widget.apiClient,
               onLogout: _handleLogout,
@@ -57,5 +65,84 @@ class _ChessMoneyAppState extends State<ChessMoneyApp> {
     setState(() {
       _isAuthenticated = false;
     });
+  }
+}
+
+class _StartupSplashScreen extends StatelessWidget {
+  const _StartupSplashScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(color: Color(0xFFF8FBFF)),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Image.asset(
+                      'lib/src/assets/splase.png',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0x201D3B73), Color(0xCC0E1F39)],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 20,
+                    right: 20,
+                    bottom: 20,
+                    child: Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.90),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: const Color(0xFFBFD7FF)),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Chess Money',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(
+                                  color: AppColors.heading,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Loading your wallet and matches...',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.mutedText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -587,6 +587,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _showChallengeDialog(RegisteredUser user) async {
     final betController = TextEditingController(text: '10');
+    final formKey = GlobalKey<FormState>();
     String timeControl = 'blitz';
 
     try {
@@ -598,51 +599,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
             content: StatefulBuilder(
               builder: (context, setDialogState) {
                 return SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: betController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Bet amount',
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextFormField(
+                          controller: betController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d*\.?\d{0,2}$'),
+                            ),
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'Bet amount',
+                            helperText: 'Min 10, Max 100',
+                          ),
+                          validator: (value) {
+                            final amount = double.tryParse(value?.trim() ?? '');
+                            if (amount == null) {
+                              return 'Enter a valid amount';
+                            }
+                            if (amount < 10 || amount > 100) {
+                              return 'Bet amount must be between 10 and 100';
+                            }
+                            return null;
+                          },
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        initialValue: timeControl,
-                        decoration: const InputDecoration(
-                          labelText: 'Time control',
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: timeControl,
+                          decoration: const InputDecoration(
+                            labelText: 'Time control',
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'bullet',
+                              child: Text('Bullet'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'blitz',
+                              child: Text('Blitz'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'rapid',
+                              child: Text('Rapid'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'classical',
+                              child: Text('Classical'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setDialogState(() {
+                              timeControl = value ?? 'blitz';
+                            });
+                          },
                         ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'bullet',
-                            child: Text('Bullet'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'blitz',
-                            child: Text('Blitz'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'rapid',
-                            child: Text('Rapid'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'classical',
-                            child: Text('Classical'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setDialogState(() {
-                            timeControl = value ?? 'blitz';
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Opponent match only: both wallets lock the bet after acceptance. The winner receives the full pot; puzzles and bot games never affect wallet balance.',
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Opponent match only: both wallets lock the bet after acceptance. The winner receives the full pot; puzzles and bot games never affect wallet balance.',
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
@@ -653,7 +675,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
+                onPressed: () {
+                  if (formKey.currentState?.validate() ?? false) {
+                    Navigator.of(dialogContext).pop(true);
+                  }
+                },
                 child: const Text('Send'),
               ),
             ],
@@ -666,6 +692,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       final betAmount = double.parse(betController.text.trim());
+      if (betAmount < 10 || betAmount > 100) {
+        if (mounted) {
+          setState(() => _error = 'Bet amount must be between 10 and 100.');
+        }
+        return;
+      }
       final created = await widget.apiClient.createMatch(
         mode: 'competitive',
         betAmount: betAmount,
