@@ -15,6 +15,7 @@ Route::get('/login', fn () => redirect()->route('admin.login'))->name('login');
 
 Route::middleware(['auth', 'admin.web'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
+    Route::post('/settings/commission', [AdminDashboardController::class, 'updateCommission'])->name('admin.settings.commission');
     Route::get('/users', [AdminDashboardController::class, 'users'])->name('admin.users');
     Route::get('/users/create', [AdminDashboardController::class, 'createUser'])->name('admin.users.create');
     Route::post('/users', [AdminDashboardController::class, 'storeUser'])->name('admin.users.store');

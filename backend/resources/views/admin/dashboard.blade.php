@@ -52,4 +52,26 @@
   <h3 style="margin-top:0">Admin Notes</h3>
   <p style="margin:0;color:#556070">Monitor suspicious betting loops, delayed settlements, and sudden wallet spikes from this dashboard.</p>
 </div>
+
+<div class="card" style="margin-top:16px;max-width:520px">
+  <h3 style="margin-top:0">Match Commission</h3>
+  <p style="margin:0 0 12px;color:#556070">The winner payout is reduced by this percentage and the commission goes to the admin wallet.</p>
+  <form method="POST" action="{{ route('admin.settings.commission') }}">
+    @csrf
+    <label for="commission_percent">Commission percent</label>
+    <input
+      id="commission_percent"
+      name="commission_percent"
+      type="number"
+      min="0"
+      max="100"
+      step="0.01"
+      value="{{ old('commission_percent', $commissionPercent) }}"
+    >
+    <div class="form-actions" style="padding-top:0;border-top:0;margin-top:0">
+      <button class="btn" type="submit">Update Commission</button>
+      <small>Current value: {{ number_format($commissionPercent, 2) }}%</small>
+    </div>
+  </form>
+</div>
 @endsection

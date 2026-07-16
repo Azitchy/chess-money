@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Bet;
 use App\Models\MatchGame;
+use App\Models\PlatformSetting;
 use App\Models\User;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class MatchController extends Controller
 {
@@ -225,7 +227,20 @@ class MatchController extends Controller
                     Bet::where('match_id', $lockedMatch->id)->update(['status' => 'refunded']);
                 } else {
                     $winner = $data['result'] === 'player1_win' ? $player1 : $player2;
-                    $walletService->addFunds($winner, (float) $lockedMatch->bet_amount * 2, 'win_reward', "Winning reward for match #{$lockedMatch->id}");
+                    $grossPayout = (float) $lockedMatch->bet_amount * 2;
+                    $commissionPercent = $this->matchCommissionPercent();
+                    $commissionAmount = round($grossPayout * ($commissionPercent / 100), 2);
+                    $winnerPayout = round($grossPayout - $commissionAmount, 2);
+
+                    $walletService->addFunds($winner, $winnerPayout, 'win_reward', "Winning reward for match #{$lockedMatch->id}");
+                    if ($commissionAmount > 0) {
+                        $walletService->addFunds(
+                            $this->commissionRecipient(),
+                            $commissionAmount,
+                            'match_commission',
+                            "Match commission for match #{$lockedMatch->id}"
+                        );
+                    }
                     Bet::where('match_id', $lockedMatch->id)->update(['status' => 'settled']);
                     $lockedMatch->winner_id = $winner->id;
                 }
@@ -296,5 +311,27 @@ class MatchController extends Controller
             'accepted_at' => $match->accepted_at,
             'ended_at' => $match->ended_at,
         ];
+    }
+
+    private function matchCommissionPercent(): float
+    {
+        return max(0.0, min(100.0, (float) PlatformSetting::getValue('match_commission_percent', 10)));
+    }
+
+    private function commissionRecipient(): User
+    {
+        return User::query()
+            ->where('is_admin', true)
+            ->orderBy('id')
+            ->first()
+            ?? User::create([
+                'name' => 'Platform Admin',
+                'username' => 'commission-admin-'.Str::lower(Str::random(8)),
+                'email' => 'commission-admin-'.Str::lower(Str::random(8)).'@chessbet.local',
+                'password' => Str::random(32),
+                'wallet_balance' => 0,
+                'is_admin' => true,
+                'is_active' => true,
+            ]);
     }
 }

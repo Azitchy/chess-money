@@ -13,6 +13,15 @@ class ChallengeFlowTest extends TestCase
 
     public function test_challenge_can_be_received_accepted_played_and_settled(): void
     {
+        $admin = User::create([
+            'name' => 'Platform Admin',
+            'username' => 'platform-admin',
+            'email' => 'platform-admin@chessbet.local',
+            'password' => 'Admin@12345',
+            'wallet_balance' => 0,
+            'is_admin' => true,
+            'is_active' => true,
+        ]);
         [$challenger, $challengerToken] = $this->onlineUser();
         [$opponent, $opponentToken] = $this->onlineUser();
 
@@ -65,8 +74,9 @@ class ChallengeFlowTest extends TestCase
             'result' => 'player1_win',
         ])->assertOk()->assertJsonPath('confirmed', true)->assertJsonPath('match.winner_id', $challenger->id);
 
-        $this->assertEquals(110, (float) $challenger->fresh()->wallet_balance);
+        $this->assertEquals(108, (float) $challenger->fresh()->wallet_balance);
         $this->assertEquals(90, (float) $opponent->fresh()->wallet_balance);
+        $this->assertEquals(2, (float) $admin->fresh()->wallet_balance);
         $this->assertSame(1, $challenger->fresh()->rating);
         $this->assertSame(1, $challenger->fresh()->level);
         $this->assertSame(0, $opponent->fresh()->rating);

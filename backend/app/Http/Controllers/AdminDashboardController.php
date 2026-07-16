@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Bet;
+use App\Models\PlatformSetting;
 use App\Models\MatchGame;
 use App\Models\User;
 use App\Models\WalletConversation;
@@ -28,7 +29,20 @@ class AdminDashboardController extends Controller
             'total_wagered' => (float) Bet::sum('amount'),
         ];
 
-        return view('admin.dashboard', compact('stats'));
+        $commissionPercent = (float) PlatformSetting::getValue('match_commission_percent', 10);
+
+        return view('admin.dashboard', compact('stats', 'commissionPercent'));
+    }
+
+    public function updateCommission(Request $request)
+    {
+        $data = $request->validate([
+            'commission_percent' => ['required', 'numeric', 'min:0', 'max:100'],
+        ]);
+
+        PlatformSetting::setValue('match_commission_percent', $data['commission_percent']);
+
+        return back()->with('success', 'Match commission updated');
     }
 
     public function users(Request $request)
