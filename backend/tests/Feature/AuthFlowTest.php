@@ -114,6 +114,69 @@ class AuthFlowTest extends TestCase
         ]);
     }
 
+    public function test_google_login_reuses_existing_gmail_without_creating_duplicate(): void
+    {
+        $existingUser = User::factory()->create([
+            'email' => 'Existing.User@GMAIL.com',
+            'google_id' => null,
+            'is_active' => true,
+        ]);
+
+        Http::fake([
+            'https://openidconnect.googleapis.com/v1/userinfo' => Http::response([
+                'email_verified' => true,
+                'email' => 'existing.user@gmail.com',
+                'name' => 'Existing User',
+                'sub' => 'existing-google-sub-123',
+            ], 200),
+        ]);
+
+        $response = $this->postJson('/api/google-login', [
+            'access_token' => 'fake-mobile-access-token',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('user.id', $existingUser->id)
+            ->assertJsonPath('user.email', 'existing.user@gmail.com');
+
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseHas('users', [
+            'id' => $existingUser->id,
+            'email' => 'existing.user@gmail.com',
+            'google_id' => 'existing-google-sub-123',
+        ]);
+    }
+
+    public function test_google_login_rejects_gmail_linked_to_another_google_id(): void
+    {
+        User::factory()->create([
+            'email' => 'linked.user@gmail.com',
+            'google_id' => 'original-google-sub',
+            'is_active' => true,
+        ]);
+
+        Http::fake([
+            'https://openidconnect.googleapis.com/v1/userinfo' => Http::response([
+                'email_verified' => true,
+                'email' => 'linked.user@gmail.com',
+                'name' => 'Linked User',
+                'sub' => 'different-google-sub',
+            ], 200),
+        ]);
+
+        $response = $this->postJson('/api/google-login', [
+            'access_token' => 'fake-mobile-access-token',
+        ]);
+
+        $response->assertStatus(409)
+            ->assertJsonPath(
+                'message',
+                'This Gmail address is already linked to another Google account.'
+            );
+
+        $this->assertDatabaseCount('users', 1);
+    }
+
     public function test_admin_users_page_shows_registered_users(): void
     {
         $admin = User::factory()->create([

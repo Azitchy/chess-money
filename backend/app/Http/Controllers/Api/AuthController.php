@@ -13,6 +13,10 @@ class AuthController extends Controller
 {
     public function register(Request $request)
     {
+        $request->merge([
+            'email' => Str::lower(trim((string) $request->input('email'))),
+        ]);
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'username' => ['nullable', 'string', 'max:255', 'unique:users,username'],
@@ -102,10 +106,11 @@ class AuthController extends Controller
             return response()->json(['message' => 'Google account email is not verified'], 422);
         }
 
-        $email = $payload['email'] ?? null;
-        if (! is_string($email) || $email === '') {
+        $payloadEmail = $payload['email'] ?? null;
+        if (! is_string($payloadEmail) || trim($payloadEmail) === '') {
             return response()->json(['message' => 'Invalid Google login'], 422);
         }
+        $email = Str::lower(trim($payloadEmail));
 
         $googleId = $payload['sub'] ?? null;
         if (! is_string($googleId) || $googleId === '') {
@@ -113,9 +118,16 @@ class AuthController extends Controller
         }
         $name = $payload['name'] ?? $payload['email'] ?? 'Google User';
 
-        $user = User::where('google_id', $googleId)
-            ->orWhere('email', $email)
-            ->first();
+        $googleUser = User::where('google_id', $googleId)->first();
+        $emailUser = User::whereRaw('LOWER(email) = ?', [$email])->first();
+
+        if ($googleUser && $emailUser && ! $googleUser->is($emailUser)) {
+            return response()->json([
+                'message' => 'This Gmail address is already linked to another Google account.',
+            ], 409);
+        }
+
+        $user = $googleUser ?? $emailUser;
 
         if (! $user) {
             $user = User::create([
@@ -129,9 +141,14 @@ class AuthController extends Controller
                 'is_active' => true,
             ]);
         } else {
-            if (! $user->google_id) {
-                $user->google_id = $googleId;
+            if ($user->google_id && $user->google_id !== $googleId) {
+                return response()->json([
+                    'message' => 'This Gmail address is already linked to another Google account.',
+                ], 409);
             }
+
+            $user->google_id = $googleId;
+            $user->email = $email;
             if (! $user->email_verified_at) {
                 $user->email_verified_at = now();
             }
