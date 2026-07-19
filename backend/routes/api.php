@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/google-login', [AuthController::class, 'googleLogin']);
 
 Route::middleware('token.auth')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);

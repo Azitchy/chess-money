@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class AuthFlowTest extends TestCase
@@ -33,17 +34,18 @@ class AuthFlowTest extends TestCase
         $this->assertNotEmpty($response->json('token'));
     }
 
-    public function test_login_accepts_username_or_email(): void
+    public function test_login_accepts_email_or_phone_number(): void
     {
         $user = User::factory()->create([
             'username' => 'chesspro',
             'email' => 'chesspro@example.com',
+            'phone_number' => '+977 9800000000',
             'password' => 'Password123!',
             'is_active' => true,
         ]);
 
         $response = $this->postJson('/api/login', [
-            'login' => $user->username,
+            'identifier' => $user->phone_number,
             'password' => 'Password123!',
         ]);
 
@@ -52,6 +54,38 @@ class AuthFlowTest extends TestCase
                 'token',
                 'user' => ['id', 'name', 'username', 'email'],
             ]);
+
+        $this->assertNotEmpty($response->json('token'));
+    }
+
+    public function test_google_login_creates_or_reuses_user(): void
+    {
+        config(['services.google.client_id' => 'test-client-id']);
+
+        Http::fake([
+            'https://oauth2.googleapis.com/tokeninfo*' => Http::response([
+                'aud' => 'test-client-id',
+                'email_verified' => 'true',
+                'email' => 'google.user@example.com',
+                'name' => 'Google User',
+                'sub' => 'google-sub-123',
+            ], 200),
+        ]);
+
+        $response = $this->postJson('/api/google-login', [
+            'id_token' => 'fake-token',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonStructure([
+                'token',
+                'user' => ['id', 'name', 'username', 'email'],
+            ]);
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'google.user@example.com',
+            'google_id' => 'google-sub-123',
+        ]);
 
         $this->assertNotEmpty($response->json('token'));
     }

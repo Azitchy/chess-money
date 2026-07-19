@@ -65,13 +65,7 @@ class ApiClient {
       return overrideBaseUrl;
     }
 
-    if (kIsWeb) {
-      return 'http://127.0.0.1:8000/api';
-    }
-
-    // USB-attached Android/iOS debug builds can use localhost when paired
-    // with adb reverse or equivalent port forwarding.
-    return 'http://127.0.0.1:8000/api';
+    return 'https://hib.dailoride.com/api';
   }
 
   static String? _normalizeSavedBaseUrl(String? baseUrl) {
@@ -122,22 +116,30 @@ class ApiClient {
 
   Future<Map<String, dynamic>> register({
     required String name,
-    required String username,
     required String email,
+    String? username,
+    String? phoneNumber,
     required String password,
     bool persistSession = true,
   }) async {
     try {
+      final body = <String, dynamic>{
+        'name': name,
+        'email': email,
+        'password': password,
+      };
+      if (username != null && username.trim().isNotEmpty) {
+        body['username'] = username.trim();
+      }
+      if (phoneNumber != null && phoneNumber.trim().isNotEmpty) {
+        body['phone_number'] = phoneNumber.trim();
+      }
+
       final response = await http
           .post(
             Uri.parse('$_baseUrl/register'),
             headers: _headers,
-            body: jsonEncode({
-              'name': name,
-              'username': username,
-              'email': email,
-              'password': password,
-            }),
+            body: jsonEncode(body),
           )
           .timeout(_requestTimeout);
 
@@ -151,7 +153,7 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> login({
-    required String login,
+    required String identifier,
     required String password,
     bool persistSession = true,
   }) async {
@@ -160,7 +162,29 @@ class ApiClient {
           .post(
             Uri.parse('$_baseUrl/login'),
             headers: _headers,
-            body: jsonEncode({'login': login, 'password': password}),
+            body: jsonEncode({'identifier': identifier, 'password': password}),
+          )
+          .timeout(_requestTimeout);
+
+      return await _handleAuthResponse(
+        response,
+        persistSession: persistSession,
+      );
+    } catch (error) {
+      throw Exception(_friendlyNetworkMessage(error));
+    }
+  }
+
+  Future<Map<String, dynamic>> googleLogin({
+    required String idToken,
+    bool persistSession = true,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/google-login'),
+            headers: _headers,
+            body: jsonEncode({'id_token': idToken}),
           )
           .timeout(_requestTimeout);
 

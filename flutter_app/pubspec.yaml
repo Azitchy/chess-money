@@ -32,6 +32,8 @@ dependencies:
     sdk: flutter
   http: ^1.5.0
   shared_preferences: ^2.3.2
+  flutter_dotenv: ^5.2.1
+  google_sign_in: ^6.2.1
   image_picker: ^1.1.2
   chess: ^0.8.1
   web_socket_channel: ^3.0.3
@@ -64,6 +66,7 @@ flutter:
 
   assets:
     - lib/src/assets/
+    - .env
 
   # To add assets to your application, add an assets section, like this:
   # assets:
