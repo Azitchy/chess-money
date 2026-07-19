@@ -4,14 +4,18 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\WalletService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
+    private const WELCOME_BONUS_AMOUNT = 20.00;
+
+    public function register(Request $request, WalletService $walletService)
     {
         $request->merge([
             'email' => Str::lower(trim((string) $request->input('email'))),
@@ -29,12 +33,12 @@ class AuthController extends Controller
             $data['email'],
             $data['phone_number'] ?? null
         );
-        $user = User::create($data);
-        $plainToken = Str::random(60);
-        $user->api_token = hash('sha256', $plainToken);
-        $user->is_online = true;
-        $user->last_seen_at = now();
-        $user->save();
+        [$user, $plainToken] = DB::transaction(function () use ($data, $walletService) {
+            $user = User::create($data);
+            $this->grantWelcomeBonus($user, $walletService);
+
+            return $this->issueLoginToken($user);
+        });
 
         return response()->json(['token' => $plainToken, 'user' => $user], 201);
     }
@@ -67,7 +71,7 @@ class AuthController extends Controller
         return response()->json(['token' => $plainToken, 'user' => $user]);
     }
 
-    public function googleLogin(Request $request)
+    public function googleLogin(Request $request, WalletService $walletService)
     {
         $data = $request->validate([
             'id_token' => ['nullable', 'string', 'required_without:access_token'],
@@ -130,39 +134,42 @@ class AuthController extends Controller
         $user = $googleUser ?? $emailUser;
 
         if (! $user) {
-            $user = User::create([
-                'name' => $name,
-                'username' => $this->generateUsername($email, $googleId),
-                'email' => $email,
-                'phone_number' => null,
-                'google_id' => $googleId,
-                'password' => Str::random(40),
-                'email_verified_at' => now(),
-                'is_active' => true,
-            ]);
-        } else {
-            if ($user->google_id && $user->google_id !== $googleId) {
-                return response()->json([
-                    'message' => 'This Gmail address is already linked to another Google account.',
-                ], 409);
-            }
+            [$user, $plainToken] = DB::transaction(function () use ($email, $googleId, $name, $walletService) {
+                $user = User::create([
+                    'name' => $name,
+                    'username' => $this->generateUsername($email, $googleId),
+                    'email' => $email,
+                    'phone_number' => null,
+                    'google_id' => $googleId,
+                    'password' => Str::random(40),
+                    'email_verified_at' => now(),
+                    'is_active' => true,
+                ]);
+                $this->grantWelcomeBonus($user, $walletService);
 
-            $user->google_id = $googleId;
-            $user->email = $email;
-            if (! $user->email_verified_at) {
-                $user->email_verified_at = now();
-            }
-            if (! $user->is_active) {
-                return response()->json(['message' => 'Account is suspended'], 403);
-            }
-            $user->save();
+                return $this->issueLoginToken($user);
+            });
+
+            return response()->json(['token' => $plainToken, 'user' => $user]);
         }
 
-        $plainToken = Str::random(60);
-        $user->api_token = hash('sha256', $plainToken);
-        $user->is_online = true;
-        $user->last_seen_at = now();
+        if ($user->google_id && $user->google_id !== $googleId) {
+            return response()->json([
+                'message' => 'This Gmail address is already linked to another Google account.',
+            ], 409);
+        }
+
+        $user->google_id = $googleId;
+        $user->email = $email;
+        if (! $user->email_verified_at) {
+            $user->email_verified_at = now();
+        }
+        if (! $user->is_active) {
+            return response()->json(['message' => 'Account is suspended'], 403);
+        }
         $user->save();
+
+        [$user, $plainToken] = $this->issueLoginToken($user);
 
         return response()->json(['token' => $plainToken, 'user' => $user]);
     }
@@ -204,5 +211,29 @@ class AuthController extends Controller
         }
 
         return $candidate;
+    }
+
+    private function grantWelcomeBonus(User $user, WalletService $walletService): void
+    {
+        $walletService->addFunds(
+            $user,
+            self::WELCOME_BONUS_AMOUNT,
+            'deposit',
+            'Welcome registration bonus'
+        );
+    }
+
+    /**
+     * @return array{0: User, 1: string}
+     */
+    private function issueLoginToken(User $user): array
+    {
+        $plainToken = Str::random(60);
+        $user->api_token = hash('sha256', $plainToken);
+        $user->is_online = true;
+        $user->last_seen_at = now();
+        $user->save();
+
+        return [$user->fresh(), $plainToken];
     }
 }

@@ -29,6 +29,13 @@ class AuthFlowTest extends TestCase
         $this->assertDatabaseHas('users', [
             'username' => 'playerone',
             'email' => 'playerone@example.com',
+            'wallet_balance' => 20,
+        ]);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'amount' => 20,
+            'type' => 'deposit',
+            'status' => 'completed',
+            'description' => 'Welcome registration bonus',
         ]);
 
         $this->assertNotEmpty($response->json('token'));
@@ -85,6 +92,13 @@ class AuthFlowTest extends TestCase
         $this->assertDatabaseHas('users', [
             'email' => 'google.user@example.com',
             'google_id' => 'google-sub-123',
+            'wallet_balance' => 20,
+        ]);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'amount' => 20,
+            'type' => 'deposit',
+            'status' => 'completed',
+            'description' => 'Welcome registration bonus',
         ]);
 
         $this->assertNotEmpty($response->json('token'));
@@ -111,6 +125,7 @@ class AuthFlowTest extends TestCase
         $this->assertDatabaseHas('users', [
             'email' => 'mobile.user@example.com',
             'google_id' => 'mobile-google-sub-123',
+            'wallet_balance' => 20,
         ]);
     }
 
@@ -120,6 +135,7 @@ class AuthFlowTest extends TestCase
             'email' => 'Existing.User@GMAIL.com',
             'google_id' => null,
             'is_active' => true,
+            'wallet_balance' => 35,
         ]);
 
         Http::fake([
@@ -144,7 +160,9 @@ class AuthFlowTest extends TestCase
             'id' => $existingUser->id,
             'email' => 'existing.user@gmail.com',
             'google_id' => 'existing-google-sub-123',
+            'wallet_balance' => 35,
         ]);
+        $this->assertDatabaseCount('wallet_transactions', 0);
     }
 
     public function test_google_login_rejects_gmail_linked_to_another_google_id(): void
