@@ -39,6 +39,11 @@ return [
         'client_id' => env('GOOGLE_WEB_CLIENT_ID'),
         'android_client_id' => env('GOOGLE_ANDROID_CLIENT_ID'),
         'ios_client_id' => env('GOOGLE_IOS_CLIENT_ID'),
+        'client_ids' => array_values(array_filter([
+            env('GOOGLE_WEB_CLIENT_ID'),
+            env('GOOGLE_ANDROID_CLIENT_ID'),
+            env('GOOGLE_IOS_CLIENT_ID'),
+        ])),
     ],
 
 ];

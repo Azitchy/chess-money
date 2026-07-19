@@ -400,11 +400,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _signInWithGoogle() async {
     final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID']?.trim() ?? '';
+    final androidClientId =
+        dotenv.env['GOOGLE_ANDROID_CLIENT_ID']?.trim() ?? '';
     final iosClientId = dotenv.env['GOOGLE_IOS_CLIENT_ID']?.trim() ?? '';
+    late final String resolvedClientId;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      resolvedClientId =
+          androidClientId.isNotEmpty ? androidClientId : webClientId;
+    } else if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
+      resolvedClientId = iosClientId.isNotEmpty ? iosClientId : webClientId;
+    } else {
+      resolvedClientId = webClientId.isNotEmpty ? webClientId : androidClientId;
+    }
 
-    if (webClientId.isEmpty) {
+    if (resolvedClientId.isEmpty) {
       setState(() {
-        _error = 'Set GOOGLE_WEB_CLIENT_ID in flutter_app/.env first.';
+        _error =
+            'Set GOOGLE_ANDROID_CLIENT_ID or GOOGLE_WEB_CLIENT_ID in flutter_app/.env first.';
       });
       return;
     }
@@ -417,7 +430,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final googleSignIn = GoogleSignIn(
         scopes: const ['email', 'profile'],
-        serverClientId: webClientId,
+        serverClientId: resolvedClientId,
         clientId: defaultTargetPlatform == TargetPlatform.iOS ||
                 defaultTargetPlatform == TargetPlatform.macOS
             ? (iosClientId.isNotEmpty ? iosClientId : null)

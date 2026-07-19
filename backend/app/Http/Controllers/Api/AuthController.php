@@ -69,8 +69,12 @@ class AuthController extends Controller
             'id_token' => ['required', 'string'],
         ]);
 
-        $clientId = config('services.google.client_id');
-        if (blank($clientId)) {
+        $clientIds = collect(config('services.google.client_ids', []))
+            ->filter()
+            ->values()
+            ->all();
+
+        if ($clientIds === []) {
             return response()->json(['message' => 'Google login is not configured'], 500);
         }
 
@@ -83,7 +87,7 @@ class AuthController extends Controller
         }
 
         $payload = $response->json();
-        if (($payload['aud'] ?? null) !== $clientId) {
+        if (! in_array(($payload['aud'] ?? null), $clientIds, true)) {
             return response()->json(['message' => 'Invalid Google login'], 422);
         }
 
