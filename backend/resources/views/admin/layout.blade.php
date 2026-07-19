@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chess Admin Panel</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
     :root{
       --bg:#edf1f5;
       --sidebar:#2f3742;
@@ -20,7 +22,12 @@
       --shadow:0 12px 24px rgba(8,15,32,.08);
     }
     *{box-sizing:border-box}
-    body{margin:0;font-family:"Segoe UI",Tahoma,Verdana,sans-serif;background:var(--bg);color:var(--text)}
+    body{
+      margin:0;
+      font-family:"Manrope","Segoe UI",Tahoma,Verdana,sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
     a{text-decoration:none;color:inherit}
     .app{display:flex;min-height:100vh}
     .sidebar{width:260px;background:var(--sidebar);color:#d1d8e0;padding:14px 12px;position:sticky;top:0;height:100vh}
@@ -96,23 +103,152 @@
     nav[role="navigation"] span[aria-current="page"] span{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
     nav[role="navigation"] span[aria-disabled="true"] span{background:#f8fafc;color:#94a3b8}
     nav[role="navigation"] svg{width:14px;height:14px}
-    .login-shell{min-height:100vh;background:#464a74;display:grid;place-items:center;padding:20px}
-    .login-card{width:min(100%,1000px);min-height:640px;background:#4b4f75;border-radius:34px;box-shadow:0 30px 40px rgba(12,14,35,.45);position:relative;overflow:hidden;padding:64px 52px;color:#eef1ff}
+    .login-shell{
+      min-height:100vh;
+      background:
+        radial-gradient(circle at top left, rgba(91, 120, 255, .30), transparent 28%),
+        radial-gradient(circle at top right, rgba(68, 215, 224, .24), transparent 24%),
+        linear-gradient(135deg, #2f3157 0%, #4a4f79 42%, #3e4367 100%);
+      display:grid;
+      place-items:center;
+      padding:24px;
+    }
+    .login-card{
+      width:min(100%,960px);
+      min-height:620px;
+      background:
+        linear-gradient(180deg, rgba(72, 77, 117, .96), rgba(53, 57, 91, .98));
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:36px;
+      box-shadow:
+        0 30px 60px rgba(10, 12, 28, .42),
+        inset 0 1px 0 rgba(255,255,255,.05);
+      position:relative;
+      overflow:hidden;
+      padding:68px 56px;
+      color:#eef1ff;
+      backdrop-filter: blur(10px);
+    }
+    .login-card::after{
+      content:"";
+      position:absolute;
+      inset:auto -20% -22% auto;
+      width:420px;
+      height:420px;
+      border-radius:50%;
+      background:radial-gradient(circle, rgba(77, 213, 224, .16) 0%, rgba(77, 213, 224, 0) 68%);
+      pointer-events:none;
+    }
     .blob-a,.blob-b{position:absolute;border-radius:46% 54% 62% 38% / 52% 41% 59% 48%}
-    .blob-a{width:290px;height:320px;left:-130px;top:-30px;background:rgba(57,191,203,.55)}
-    .blob-b{width:340px;height:220px;left:38px;top:-45px;background:rgba(74,95,215,.65)}
-    .login-inner{max-width:420px;margin:90px auto 0;position:relative;z-index:2}
-    .logo-mark{font-size:44px;font-weight:700;letter-spacing:.03em}
-    .logo-sub{margin-top:6px;color:#b7c1de}
-    .welcome{font-size:52px;font-weight:300;margin:44px 0 30px}
-    .field label{display:block;color:#d5dbf3;margin-bottom:7px}
-    .line-input{background:transparent;border:none;border-bottom:2px solid #d9e1f6;border-radius:0;color:#fff;padding:8px 0}
-    .line-input:focus{outline:none;border-bottom-color:#2ad1db}
-    .sign-btn{margin-top:16px;width:100%;border:none;border-radius:6px;padding:13px 16px;font-size:30px;background:#2ed0db;color:#1c2744;cursor:pointer}
+    .blob-a{width:300px;height:320px;left:-130px;top:-40px;background:rgba(66,196,208,.42)}
+    .blob-b{width:360px;height:240px;left:18px;top:-50px;background:rgba(90,108,235,.55)}
+    .login-inner{
+      max-width:430px;
+      margin:56px auto 0;
+      position:relative;
+      z-index:2;
+    }
+    .login-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 14px;
+      border-radius:999px;
+      background:rgba(255,255,255,.10);
+      border:1px solid rgba(255,255,255,.14);
+      color:#dbe4ff;
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+    }
+    .logo-mark{
+      margin-top:18px;
+      font-size:42px;
+      font-weight:800;
+      letter-spacing:-.03em;
+      line-height:1.05;
+    }
+    .welcome{
+      font-size:52px;
+      line-height:1;
+      font-weight:300;
+      margin:28px 0 12px;
+      letter-spacing:-.04em;
+    }
+    .login-copy{
+      margin:0 0 30px;
+      color:#c9d3f4;
+      font-size:15px;
+      line-height:1.6;
+      max-width:360px;
+    }
+    form{margin-top:8px}
+    .field{margin-bottom:18px}
+    .field label{
+      display:block;
+      color:#d5dbf3;
+      margin-bottom:8px;
+      font-size:13px;
+      font-weight:700;
+      letter-spacing:.04em;
+      text-transform:uppercase;
+    }
+    .line-input{
+      width:100%;
+      background:rgba(255,255,255,.09);
+      border:1px solid rgba(255,255,255,.16);
+      border-radius:16px;
+      color:#fff;
+      padding:15px 16px;
+      font-size:15px;
+      outline:none;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+      transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease, background .18s ease;
+    }
+    .line-input::placeholder{color:#aeb8d8}
+    .line-input:focus{
+      border-color:rgba(77, 213, 224, .95);
+      background:rgba(255,255,255,.13);
+      box-shadow:0 0 0 4px rgba(46, 208, 219, .16);
+      transform:translateY(-1px);
+    }
+    .sign-btn{
+      margin-top:8px;
+      width:100%;
+      border:none;
+      border-radius:16px;
+      padding:15px 16px;
+      font-size:19px;
+      font-weight:800;
+      background:linear-gradient(135deg, #39d0df 0%, #2ca9e8 100%);
+      color:#132133;
+      cursor:pointer;
+      box-shadow:0 18px 28px rgba(44, 168, 232, .28);
+      transition:transform .18s ease, box-shadow .18s ease, filter .18s ease;
+    }
+    .sign-btn:hover{transform:translateY(-1px);filter:saturate(1.05);box-shadow:0 22px 32px rgba(44, 168, 232, .34)}
+    .sign-btn:active{transform:translateY(0)}
     .login-foot{position:absolute;left:0;right:0;bottom:30px;text-align:center;color:#c7cde6}
     .login-foot a{color:#c7cde6}
     @media (max-width:1080px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.two-col{grid-template-columns:1fr}}
-    @media (max-width:860px){.sidebar{display:none}.content{padding:14px}.topbar{padding:0 12px}.stats-grid{grid-template-columns:1fr}.content-header h1{font-size:22px}.login-card{padding:42px 24px;min-height:540px}.welcome{font-size:40px}.form-grid{grid-template-columns:1fr}.field-full{grid-column:auto}.toolbar{grid-template-columns:1fr auto}.header-actions{align-items:flex-end;flex-direction:column}.content-header{align-items:flex-start}}
+    @media (max-width:860px){
+      .sidebar{display:none}
+      .content{padding:14px}
+      .topbar{padding:0 12px}
+      .stats-grid{grid-template-columns:1fr}
+      .content-header h1{font-size:22px}
+      .login-card{padding:40px 22px;min-height:auto;border-radius:28px}
+      .login-inner{margin-top:40px}
+      .logo-mark{font-size:32px}
+      .welcome{font-size:38px}
+      .login-copy{font-size:14px}
+      .form-grid{grid-template-columns:1fr}
+      .field-full{grid-column:auto}
+      .toolbar{grid-template-columns:1fr auto}
+      .header-actions{align-items:flex-end;flex-direction:column}
+      .content-header{align-items:flex-start}
+    }
   </style>
   @yield('head')
 </head>
@@ -122,7 +258,7 @@
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-badge">A</div>
-        <strong>AdminLTE 4 Style</strong>
+        <strong>Admin Dashboard</strong>
       </div>
       <div class="menu-title">Main</div>
       <nav class="menu">
