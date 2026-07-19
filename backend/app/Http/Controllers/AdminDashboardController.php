@@ -48,6 +48,11 @@ class AdminDashboardController extends Controller
         );
     }
 
+    public function notifications()
+    {
+        return redirect(route('admin.dashboard').'#admin-send-notification');
+    }
+
     public function updateCommission(Request $request)
     {
         $data = $request->validate([

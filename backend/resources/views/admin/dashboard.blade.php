@@ -48,12 +48,12 @@
   </div>
 </div>
 
-<div class="card" id="admin-send-notification" style="margin-top:16px">
+<div class="card" style="margin-top:16px">
   <h3 style="margin-top:0">Admin Notes</h3>
   <p style="margin:0;color:#556070">Monitor suspicious betting loops, delayed settlements, and sudden wallet spikes from this dashboard.</p>
 </div>
 
-<div class="card" style="margin-top:16px">
+<div class="card" id="admin-send-notification" style="margin-top:16px">
   <h3 style="margin-top:0">Send Notification</h3>
   <p style="margin:0 0 14px;color:#556070">Send an offer, message, or announcement to every user in real time.</p>
   @php

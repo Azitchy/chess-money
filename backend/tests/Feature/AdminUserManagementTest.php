@@ -97,6 +97,15 @@ class AdminUserManagementTest extends TestCase
         $this->actingAs($player)->post('/admin/users', [])->assertForbidden();
     }
 
+    public function test_admin_notifications_get_route_opens_notification_manager(): void
+    {
+        $response = $this->actingAs($this->admin())->get('/admin/notifications');
+
+        $response->assertRedirect(
+            route('admin.dashboard').'#admin-send-notification'
+        );
+    }
+
     private function admin(): User
     {
         return User::factory()->create([

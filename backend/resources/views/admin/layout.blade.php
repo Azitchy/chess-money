@@ -276,7 +276,7 @@
       </nav>
       <div class="menu-title">Dashboard Sections</div>
       <nav class="menu">
-        <a href="{{ route('admin.dashboard') }}#admin-send-notification">Send Notification</a>
+        <a href="{{ route('admin.notifications.index') }}">Send Notification</a>
         <a href="{{ route('admin.dashboard') }}#admin-match-commission">Match Commission</a>
       </nav>
     </aside>
