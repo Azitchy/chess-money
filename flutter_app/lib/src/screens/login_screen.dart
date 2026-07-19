@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../app_colors.dart';
 import '../login_decorations.dart';
-import '../login_text_field.dart';
 import '../services/api_client.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -23,28 +23,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _name = TextEditingController();
-  final _email = TextEditingController();
-  final _phoneNumber = TextEditingController();
-  final _identifier = TextEditingController();
-  final _password = TextEditingController();
-
-  bool _registerMode = false;
-  bool _rememberMe = true;
   bool _loading = false;
-  bool _obscurePassword = true;
   String? _error;
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _email.dispose();
-    _phoneNumber.dispose();
-    _identifier.dispose();
-    _password.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const AvatarBadge(),
                       const SizedBox(height: 18),
                       Text(
-                        _registerMode ? 'Create account' : 'Welcome back',
+                        'Welcome back',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.headlineMedium
                             ?.copyWith(
@@ -79,9 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        _registerMode
-                            ? 'Set up your Chess Money profile'
-                            : 'Sign in with Google or your Gmail / phone number',
+                        'Continue with Google to sign in to your Chess Money account.',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppColors.mutedText,
@@ -90,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 24),
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.92),
                           borderRadius: BorderRadius.circular(30),
@@ -103,234 +81,37 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ],
                         ),
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              if (_registerMode) ...[
-                                PillTextField(
-                                  controller: _name,
-                                  label: 'Full name',
-                                  icon: Icons.badge_outlined,
-                                  validator: _required,
-                                ),
-                                const SizedBox(height: 12),
-                                PillTextField(
-                                  controller: _email,
-                                  label: 'Gmail',
-                                  icon: Icons.email_outlined,
-                                  keyboardType: TextInputType.emailAddress,
-                                  validator: _required,
-                                ),
-                                const SizedBox(height: 12),
-                                PillTextField(
-                                  controller: _phoneNumber,
-                                  label: 'Phone number',
-                                  icon: Icons.phone_outlined,
-                                  keyboardType: TextInputType.phone,
-                                  validator: _optionalPhone,
-                                ),
-                                const SizedBox(height: 12),
-                                PillTextField(
-                                  controller: _password,
-                                  label: 'Password',
-                                  icon: Icons.lock_outline,
-                                  obscureText: _obscurePassword,
-                                  validator: _required,
-                                  suffixIcon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_outlined
-                                        : Icons.visibility_off_outlined,
-                                    size: 20,
-                                    color: const Color(0xFF5D8FDE),
-                                  ),
-                                  onSuffixTap: () {
-                                    setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    });
-                                  },
-                                ),
-                              ] else ...[
-                                _GoogleLoginButton(
-                                  enabled: !_loading,
-                                  onPressed: _signInWithGoogle,
-                                ),
-                                const SizedBox(height: 18),
-                                const _DividerOr(),
-                                const SizedBox(height: 18),
-                                PillTextField(
-                                  controller: _identifier,
-                                  label: 'Gmail or phone number',
-                                  icon: Icons.alternate_email_outlined,
-                                  keyboardType: TextInputType.emailAddress,
-                                  validator: _required,
-                                ),
-                                const SizedBox(height: 12),
-                                PillTextField(
-                                  controller: _password,
-                                  label: 'Password',
-                                  icon: Icons.lock_outline,
-                                  obscureText: _obscurePassword,
-                                  validator: _required,
-                                  suffixIcon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_outlined
-                                        : Icons.visibility_off_outlined,
-                                    size: 20,
-                                    color: const Color(0xFF5D8FDE),
-                                  ),
-                                  onSuffixTap: () {
-                                    setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    });
-                                  },
-                                ),
-                                const SizedBox(height: 12),
-                                Wrap(
-                                  alignment: WrapAlignment.spaceBetween,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Transform.scale(
-                                          scale: 0.95,
-                                          child: Checkbox(
-                                            value: _rememberMe,
-                                            onChanged: _loading
-                                                ? null
-                                                : (value) {
-                                                    setState(() {
-                                                      _rememberMe =
-                                                          value ?? true;
-                                                    });
-                                                  },
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(4),
-                                            ),
-                                            activeColor: AppColors.blue,
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                          ),
-                                        ),
-                                        const Text(
-                                          'Remember me',
-                                          style: TextStyle(
-                                            color: AppColors.mutedText,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    TextButton(
-                                      onPressed: _loading
-                                          ? null
-                                          : _forgotPassword,
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: AppColors.blue,
-                                        padding: EdgeInsets.zero,
-                                      ),
-                                      child: const Text(
-                                        'Forgot password?',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                              if (_error != null) ...[
-                                const SizedBox(height: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 12,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFFEEF0),
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(
-                                      color: const Color(0xFFFFCED5),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _error!,
-                                    style: const TextStyle(
-                                      color: Color(0xFFB42318),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _GoogleLoginButton(
+                              enabled: !_loading,
+                              onPressed: _signInWithGoogle,
+                            ),
+                            if (_error != null) ...[
                               const SizedBox(height: 16),
-                              SizedBox(
-                                height: 52,
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [
-                                        AppColors.blue,
-                                        AppColors.lavender,
-                                      ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(26),
-                                    boxShadow: const [
-                                      BoxShadow(
-                                        color: Color(0x332A75FF),
-                                        blurRadius: 18,
-                                        offset: Offset(0, 10),
-                                      ),
-                                    ],
-                                  ),
-                                  child: ElevatedButton(
-                                    onPressed: _loading ? null : _submit,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.transparent,
-                                      shadowColor: Colors.transparent,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(26),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      _loading
-                                          ? 'Please wait...'
-                                          : (_registerMode
-                                                ? 'Sign up'
-                                                : 'Sign in'),
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
                                 ),
-                              ),
-                              const SizedBox(height: 12),
-                              TextButton(
-                                onPressed: _loading
-                                    ? null
-                                    : () => setState(() {
-                                        _registerMode = !_registerMode;
-                                        _error = null;
-                                      }),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: AppColors.deepPurple,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFEEF0),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: const Color(0xFFFFCED5),
+                                  ),
                                 ),
                                 child: Text(
-                                  _registerMode
-                                      ? 'Already have an account? Sign in'
-                                      : 'New here? Create an account',
+                                  _error!,
                                   style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFB42318),
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
                             ],
-                          ),
+                          ],
                         ),
                       ),
                     ],
@@ -344,83 +125,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Future<void> _submit() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    try {
-      if (_registerMode) {
-        await widget.apiClient.register(
-          name: _name.text.trim(),
-          email: _email.text.trim(),
-          phoneNumber: _phoneNumber.text.trim(),
-          password: _password.text,
-          persistSession: true,
-        );
-      } else {
-        await widget.apiClient.login(
-          identifier: _identifier.text.trim(),
-          password: _password.text,
-          persistSession: _rememberMe,
-        );
-      }
-
-      widget.onLogin();
-    } catch (e) {
-      setState(() => _error = friendlyAppErrorMessage(e));
-    } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
-    }
-  }
-
-  void _forgotPassword() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Password reset flow is not wired up yet.')),
-    );
-  }
-
-  String? _required(String? value) =>
-      (value == null || value.trim().isEmpty) ? 'Required' : null;
-
-  String? _optionalPhone(String? value) {
-    final trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return null;
-    }
-
-    final valid = RegExp(r'^[0-9+\-\s()]{6,}$').hasMatch(trimmed);
-    return valid ? null : 'Enter a valid phone number';
-  }
-
   Future<void> _signInWithGoogle() async {
-    final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID']?.trim() ?? '';
-    final androidClientId =
-        dotenv.env['GOOGLE_ANDROID_CLIENT_ID']?.trim() ?? '';
     final iosClientId = dotenv.env['GOOGLE_IOS_CLIENT_ID']?.trim() ?? '';
-    late final String resolvedClientId;
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      resolvedClientId =
-          androidClientId.isNotEmpty ? androidClientId : webClientId;
-    } else if (defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.macOS) {
-      resolvedClientId = iosClientId.isNotEmpty ? iosClientId : webClientId;
-    } else {
-      resolvedClientId = webClientId.isNotEmpty ? webClientId : androidClientId;
-    }
-
-    if (resolvedClientId.isEmpty) {
-      setState(() {
-        _error =
-            'Set GOOGLE_ANDROID_CLIENT_ID or GOOGLE_WEB_CLIENT_ID in flutter_app/.env first.';
-      });
-      return;
-    }
+    final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID']?.trim() ?? '';
+    final isApplePlatform =
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
 
     setState(() {
       _loading = true;
@@ -430,11 +140,11 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final googleSignIn = GoogleSignIn(
         scopes: const ['email', 'profile'],
-        serverClientId: resolvedClientId,
-        clientId: defaultTargetPlatform == TargetPlatform.iOS ||
-                defaultTargetPlatform == TargetPlatform.macOS
-            ? (iosClientId.isNotEmpty ? iosClientId : null)
+        clientId: isApplePlatform && iosClientId.isNotEmpty
+            ? iosClientId
             : null,
+        // Google requires an OAuth Web client here, never the Android client.
+        serverClientId: webClientId.isNotEmpty ? webClientId : null,
       );
 
       final account = await googleSignIn.signIn();
@@ -444,59 +154,53 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final auth = await account.authentication;
       final idToken = auth.idToken;
-      if (idToken == null || idToken.isEmpty) {
-        throw Exception('Google did not return an ID token.');
+      final accessToken = auth.accessToken;
+
+      if ((idToken == null || idToken.isEmpty) &&
+          (accessToken == null || accessToken.isEmpty)) {
+        throw Exception('Google did not return a usable token.');
       }
 
       await widget.apiClient.googleLogin(
         idToken: idToken,
+        accessToken: accessToken,
         persistSession: true,
       );
       widget.onLogin();
     } catch (e) {
-      setState(() => _error = friendlyAppErrorMessage(e));
+      setState(() => _error = _googleLoginErrorMessage(e));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
       }
     }
   }
-}
 
-class _DividerOr extends StatelessWidget {
-  const _DividerOr();
+  String _googleLoginErrorMessage(Object error) {
+    if (error is ApiException) {
+      return error.message;
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(
-          child: Divider(color: Color(0xFFD7E4FA), thickness: 1),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Text(
-            'or',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.mutedText,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.1,
-                ),
-          ),
-        ),
-        const Expanded(
-          child: Divider(color: Color(0xFFD7E4FA), thickness: 1),
-        ),
-      ],
-    );
+    if (error is PlatformException) {
+      final details = '${error.message ?? ''} ${error.details ?? ''}';
+      if (details.contains('ApiException: 10')) {
+        return 'Google OAuth does not match this app package and SHA-1. '
+            'Please update the Android OAuth client and try again.';
+      }
+      if (error.code == 'network_error') {
+        return 'Google could not connect. Please check your internet and try again.';
+      }
+      if (error.code == 'sign_in_canceled') {
+        return 'Google sign-in was cancelled.';
+      }
+    }
+
+    return friendlyAppErrorMessage(error);
   }
 }
 
 class _GoogleLoginButton extends StatelessWidget {
-  const _GoogleLoginButton({
-    required this.enabled,
-    required this.onPressed,
-  });
+  const _GoogleLoginButton({required this.enabled, required this.onPressed});
 
   final bool enabled;
   final VoidCallback onPressed;
@@ -504,7 +208,7 @@ class _GoogleLoginButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 54,
+      height: 56,
       child: OutlinedButton.icon(
         onPressed: enabled ? onPressed : null,
         style: OutlinedButton.styleFrom(
@@ -512,7 +216,7 @@ class _GoogleLoginButton extends StatelessWidget {
           foregroundColor: const Color(0xFF243B67),
           side: const BorderSide(color: Color(0xFFD7E4FA)),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(26),
           ),
         ),
         icon: Container(
@@ -534,10 +238,7 @@ class _GoogleLoginButton extends StatelessWidget {
         ),
         label: const Text(
           'Continue with Google',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-          ),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
         ),
       ),
     );

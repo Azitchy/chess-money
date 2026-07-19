@@ -107,7 +107,10 @@ class ApiClient {
   }
 
   Map<String, String> get _headers {
-    final headers = {'Content-Type': 'application/json'};
+    final headers = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
     if (_token != null) {
       headers['Authorization'] = 'Bearer $_token';
     }
@@ -176,15 +179,24 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> googleLogin({
-    required String idToken,
+    String? idToken,
+    String? accessToken,
     bool persistSession = true,
   }) async {
     try {
+      final body = <String, dynamic>{};
+      if (idToken != null && idToken.trim().isNotEmpty) {
+        body['id_token'] = idToken.trim();
+      }
+      if (accessToken != null && accessToken.trim().isNotEmpty) {
+        body['access_token'] = accessToken.trim();
+      }
+
       final response = await http
           .post(
             Uri.parse('$_baseUrl/google-login'),
             headers: _headers,
-            body: jsonEncode({'id_token': idToken}),
+            body: jsonEncode(body),
           )
           .timeout(_requestTimeout);
 
@@ -193,6 +205,9 @@ class ApiClient {
         persistSession: persistSession,
       );
     } catch (error) {
+      if (error is ApiException) {
+        throw error;
+      }
       throw Exception(_friendlyNetworkMessage(error));
     }
   }
@@ -629,9 +644,9 @@ class ApiClient {
           ? <String, dynamic>{}
           : jsonDecode(response.body) as Map<String, dynamic>;
     } catch (_) {
-      payload = <String, dynamic>{
-        'message': 'Something went wrong. Please try again.',
-      };
+      throw ApiException(
+        'The live server returned an invalid response. Please contact support.',
+      );
     }
 
     if (response.statusCode >= 400) {
@@ -642,7 +657,10 @@ class ApiClient {
           'Session expired. Please logout and login again. Thank you!',
         );
       }
-      throw Exception('Something went wrong. Please try again.');
+      throw ApiException(
+        payload['message']?.toString() ??
+            'Something went wrong. Please try again.',
+      );
     }
     return payload;
   }
@@ -692,6 +710,15 @@ class ApiClient {
         (first == 172 && second >= 16 && second <= 31) ||
         (first == 192 && second == 168);
   }
+}
+
+class ApiException implements Exception {
+  const ApiException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 bool _isSessionError(Object error, String message) {

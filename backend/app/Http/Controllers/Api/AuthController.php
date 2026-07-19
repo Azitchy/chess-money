@@ -66,7 +66,8 @@ class AuthController extends Controller
     public function googleLogin(Request $request)
     {
         $data = $request->validate([
-            'id_token' => ['required', 'string'],
+            'id_token' => ['nullable', 'string', 'required_without:access_token'],
+            'access_token' => ['nullable', 'string', 'required_without:id_token'],
         ]);
 
         $clientIds = collect(config('services.google.client_ids', []))
@@ -74,24 +75,30 @@ class AuthController extends Controller
             ->values()
             ->all();
 
-        if ($clientIds === []) {
-            return response()->json(['message' => 'Google login is not configured'], 500);
-        }
+        if (! empty($data['id_token'])) {
+            if ($clientIds === []) {
+                return response()->json(['message' => 'Google login is not configured'], 500);
+            }
 
-        $response = Http::acceptJson()->get('https://oauth2.googleapis.com/tokeninfo', [
-            'id_token' => $data['id_token'],
-        ]);
+            $response = Http::acceptJson()->get('https://oauth2.googleapis.com/tokeninfo', [
+                'id_token' => $data['id_token'],
+            ]);
+        } else {
+            $response = Http::acceptJson()
+                ->withToken($data['access_token'])
+                ->get('https://openidconnect.googleapis.com/v1/userinfo');
+        }
 
         if (! $response->successful()) {
             return response()->json(['message' => 'Invalid Google login'], 422);
         }
 
         $payload = $response->json();
-        if (! in_array(($payload['aud'] ?? null), $clientIds, true)) {
+        if (! empty($data['id_token']) && ! in_array(($payload['aud'] ?? null), $clientIds, true)) {
             return response()->json(['message' => 'Invalid Google login'], 422);
         }
 
-        if (($payload['email_verified'] ?? 'false') !== 'true') {
+        if (! in_array($payload['email_verified'] ?? false, [true, 'true', 1, '1'], true)) {
             return response()->json(['message' => 'Google account email is not verified'], 422);
         }
 

@@ -60,7 +60,7 @@ class AuthFlowTest extends TestCase
 
     public function test_google_login_creates_or_reuses_user(): void
     {
-        config(['services.google.client_id' => 'test-client-id']);
+        config(['services.google.client_ids' => ['test-client-id']]);
 
         Http::fake([
             'https://oauth2.googleapis.com/tokeninfo*' => Http::response([
@@ -88,6 +88,30 @@ class AuthFlowTest extends TestCase
         ]);
 
         $this->assertNotEmpty($response->json('token'));
+    }
+
+    public function test_google_login_accepts_mobile_access_token(): void
+    {
+        Http::fake([
+            'https://openidconnect.googleapis.com/v1/userinfo' => Http::response([
+                'email_verified' => true,
+                'email' => 'mobile.user@example.com',
+                'name' => 'Mobile User',
+                'sub' => 'mobile-google-sub-123',
+            ], 200),
+        ]);
+
+        $response = $this->postJson('/api/google-login', [
+            'access_token' => 'fake-mobile-access-token',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('user.email', 'mobile.user@example.com');
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'mobile.user@example.com',
+            'google_id' => 'mobile-google-sub-123',
+        ]);
     }
 
     public function test_admin_users_page_shows_registered_users(): void
