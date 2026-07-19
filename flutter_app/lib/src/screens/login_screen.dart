@@ -26,7 +26,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _login = TextEditingController();
   final _password = TextEditingController();
-  late final TextEditingController _serverUrl;
 
   bool _registerMode = false;
   bool _rememberMe = true;
@@ -35,21 +34,12 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   @override
-  void initState() {
-    super.initState();
-    _serverUrl = TextEditingController(
-      text: _displayBaseUrl(widget.apiClient.baseUrl),
-    );
-  }
-
-  @override
   void dispose() {
     _name.dispose();
     _username.dispose();
     _email.dispose();
     _login.dispose();
     _password.dispose();
-    _serverUrl.dispose();
     super.dispose();
   }
 
@@ -309,19 +299,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
-                              TextButton(
-                                onPressed: _loading ? null : _editServerUrl,
-                                style: TextButton.styleFrom(
-                                  foregroundColor: AppColors.blue,
-                                ),
-                                child: Text(
-                                  'Backend URL: ${_displayBaseUrl(widget.apiClient.baseUrl)}',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
                             ],
                           ),
                         ),
@@ -378,61 +355,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Future<void> _editServerUrl() async {
-    _serverUrl.text = _displayBaseUrl(widget.apiClient.baseUrl);
-
-    final newUrl = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Backend URL'),
-          content: TextField(
-            controller: _serverUrl,
-            keyboardType: TextInputType.url,
-            decoration: const InputDecoration(
-              hintText: 'http://192.168.1.10:8000',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(_serverUrl.text.trim());
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (newUrl == null || newUrl.trim().isEmpty) {
-      return;
-    }
-
-    try {
-      await widget.apiClient.setBaseUrl(newUrl.trim());
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Backend URL saved. Please sign in again.'),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _error = friendlyAppErrorMessage(error);
-      });
-    }
-  }
-
   String? _required(String? value) =>
       (value == null || value.trim().isEmpty) ? 'Required' : null;
-
-  static String _displayBaseUrl(String baseUrl) {
-    return baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
-  }
 }
