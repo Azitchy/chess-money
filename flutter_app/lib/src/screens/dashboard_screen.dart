@@ -16,6 +16,7 @@ import '../interactive_chess_board.dart';
 import '../live_match.dart';
 import '../match_summary.dart';
 import '../platform_notification.dart';
+import '../player_progress.dart';
 import '../registered_user.dart';
 import '../services/api_client.dart';
 import 'profile_screen.dart';
@@ -61,7 +62,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final Set<int> _announcedChallenges = {};
   final Set<int> _openedMatches = {};
   int _selectedIndex = 0;
-  String? _error;
+  String? _homeError;
+  String? _playersError;
+  String? _walletError;
+  String? _matchError;
+  String? _recentMatchesError;
   double _balance = 0;
   List<MatchSummary> _history = const [];
   List<RegisteredUser> _users = const [];
@@ -207,7 +212,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildPage(String pageKey, List<Widget> children) {
+  Widget _buildPage(String pageKey, List<Widget> children, {String? error}) {
     return RefreshIndicator(
       color: AppColors.blue,
       onRefresh: widget.demoMode ? () async {} : _load,
@@ -216,8 +221,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          if (_error != null) ...[
-            ErrorBanner(message: _error!),
+          if (error != null) ...[
+            ErrorBanner(message: error),
             const SizedBox(height: 16),
           ],
           if (widget.demoMode) ...[
@@ -338,7 +343,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
       ),
-    ]);
+    ], error: _homeError);
   }
 
   Future<void> _openChessActivity({
@@ -418,7 +423,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
       ),
-    ]);
+    ], error: _playersError);
   }
 
   Widget _buildWalletPage() {
@@ -458,7 +463,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
       ),
-    ]);
+    ], error: _walletError);
   }
 
   void _openWalletMessages(String requestType) {
@@ -493,7 +498,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
       ),
-    ]);
+    ], error: _matchError);
   }
 
   Widget _buildRecentMatchesPage() {
@@ -512,54 +517,129 @@ class _DashboardScreenState extends State<DashboardScreen> {
               : _history.map((item) => MatchTile(match: item)).toList(),
         ),
       ),
-    ]);
+    ], error: _recentMatchesError);
   }
 
   Future<void> _load() async {
     setState(() {
       _loading = true;
-      _error = null;
+      _homeError = null;
+      _playersError = null;
+      _walletError = null;
+      _matchError = null;
+      _recentMatchesError = null;
     });
 
+    await Future.wait([
+      _loadHomeSummary(),
+      _loadPlayers(),
+      _loadRecentMatches(),
+      _loadToolbarData(),
+    ]);
+
+    if (mounted) {
+      _syncPresenceHeartbeat();
+      _syncChallengePolling();
+      _syncNotificationSocket();
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadHomeSummary() async {
     try {
-      final balance = await widget.apiClient.getWalletBalance();
-      final progress = await widget.apiClient.getPlayerProgress();
-      final history = await widget.apiClient.getMatchHistory();
-      final users = await widget.apiClient.getUsers();
-      final notifications = await widget.apiClient.getPlatformNotifications();
-      final isOnline = await widget.apiClient.getPresence();
+      final results = await Future.wait<Object>([
+        widget.apiClient.getWalletBalance(),
+        widget.apiClient.getPlayerProgress(),
+      ]);
+      if (!mounted) return;
+      final progress = results[1] as PlayerProgress;
       setState(() {
-        _balance = balance;
+        _balance = results[0] as double;
         _currentUserId = progress.userId;
         _rating = progress.rating;
         _level = progress.level;
+        _homeError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _homeError = friendlyAppErrorMessage(
+          error,
+          action: 'load your account summary',
+        );
+      });
+    }
+  }
+
+  Future<void> _loadPlayers() async {
+    try {
+      final users = await widget.apiClient.getUsers();
+      if (!mounted) return;
+      setState(() {
+        _users = users;
+        _playersError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _playersError = friendlyAppErrorMessage(error, action: 'load players');
+      });
+    }
+  }
+
+  Future<void> _loadRecentMatches() async {
+    try {
+      final history = await widget.apiClient.getMatchHistory();
+      if (!mounted) return;
+      setState(() {
         _history = history
             .whereType<Map<String, dynamic>>()
             .map(MatchSummary.fromJson)
             .toList(growable: false);
-        _users = users;
-        _platformNotifications = notifications;
-        _notificationUnreadCount = notifications
-            .where((item) => !item.isRead)
-            .length;
-        _isOnline = isOnline;
+        _recentMatchesError = null;
       });
-      _syncPresenceHeartbeat();
-      _syncChallengePolling();
-      _syncNotificationSocket();
-    } catch (e) {
-      setState(() => _error = friendlyAppErrorMessage(e));
-    } finally {
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _recentMatchesError = friendlyAppErrorMessage(
+          error,
+          action: 'load recent matches',
+        );
+      });
+    }
+  }
+
+  Future<void> _loadToolbarData() async {
+    try {
+      final notifications = await widget.apiClient.getPlatformNotifications();
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _platformNotifications = notifications;
+          _notificationUnreadCount = notifications
+              .where((item) => !item.isRead)
+              .length;
+        });
       }
+    } catch (_) {
+      // Toolbar data retries in the background and should not cover a tab.
+    }
+
+    try {
+      final isOnline = await widget.apiClient.getPresence();
+      if (mounted) setState(() => _isOnline = isOnline);
+    } catch (_) {
+      // Keep the last known status until the presence heartbeat succeeds.
     }
   }
 
   Future<void> _loadDemoData() async {
     setState(() {
       _loading = true;
-      _error = null;
+      _homeError = null;
+      _playersError = null;
+      _walletError = null;
+      _matchError = null;
+      _recentMatchesError = null;
     });
 
     await Future<void>.delayed(const Duration(milliseconds: 250));
@@ -735,7 +815,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final betAmount = double.parse(betController.text.trim());
       if (betAmount < 10 || betAmount > 100) {
         if (mounted) {
-          setState(() => _error = 'Bet amount must be between 10 and 100.');
+          setState(
+            () => _playersError = 'Bet amount must be between 10 and 100.',
+          );
         }
         return;
       }
@@ -767,7 +849,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _error = friendlyAppErrorMessage(e));
+        setState(() {
+          _playersError = friendlyAppErrorMessage(
+            e,
+            action: 'send this challenge',
+          );
+        });
       }
     } finally {
       betController.dispose();
@@ -1209,7 +1296,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         await _openNetworkMatch(active);
       }
     } catch (error) {
-      if (mounted) setState(() => _error = friendlyAppErrorMessage(error));
+      if (mounted) {
+        setState(() {
+          _matchError = friendlyAppErrorMessage(
+            error,
+            action: action == 'reject'
+                ? 'reject this challenge'
+                : 'accept this challenge',
+          );
+        });
+      }
     } finally {
       if (mounted) await _pollMatches();
     }
@@ -1219,7 +1315,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final userId = _currentUserId;
     if (!mounted || userId == null) return;
     if (match.status != 'active' || match.acceptedAt == null) {
-      setState(() => _error = 'Waiting for the challenged player to accept.');
+      setState(
+        () => _matchError = 'Waiting for the challenged player to accept.',
+      );
       return;
     }
     await Navigator.of(context).push<bool>(
@@ -1291,7 +1389,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       setState(() {
         _isOnline = updated;
-        _error = null;
       });
       _syncPresenceHeartbeat();
       _syncChallengePolling();
@@ -1303,7 +1400,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     } catch (error) {
       if (mounted) {
-        setState(() => _error = friendlyAppErrorMessage(error));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              friendlyAppErrorMessage(
+                error,
+                action: 'update your online status',
+              ),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _updatingPresence = false);
@@ -1891,7 +1997,10 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
     } catch (error) {
       if (mounted) {
         setState(() {
-          _notice = friendlyAppErrorMessage(error);
+          _notice = friendlyAppErrorMessage(
+            error,
+            action: 'save your puzzle reward',
+          );
         });
       }
     } finally {
@@ -1994,7 +2103,10 @@ class _ChessActivityScreenState extends State<ChessActivityScreen> {
     } catch (error) {
       if (mounted) {
         setState(() {
-          _notice = friendlyAppErrorMessage(error);
+          _notice = friendlyAppErrorMessage(
+            error,
+            action: 'save your bot-game reward',
+          );
         });
       }
       return;

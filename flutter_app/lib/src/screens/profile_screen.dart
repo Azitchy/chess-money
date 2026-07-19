@@ -331,7 +331,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = friendlyAppErrorMessage(error);
+        _error = friendlyAppErrorMessage(error, action: 'load your profile');
       });
     }
   }
@@ -358,7 +358,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     } catch (error) {
       if (mounted) {
-        setState(() => _error = friendlyAppErrorMessage(error));
+        setState(() {
+          _error = friendlyAppErrorMessage(
+            error,
+            action: 'select your profile photo',
+          );
+        });
       }
     }
   }
@@ -413,7 +418,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     } catch (error) {
       if (mounted) {
-        setState(() => _error = friendlyAppErrorMessage(error));
+        setState(() {
+          _error = friendlyAppErrorMessage(
+            error,
+            action: 'save your profile changes',
+          );
+        });
       }
     } finally {
       if (mounted) {

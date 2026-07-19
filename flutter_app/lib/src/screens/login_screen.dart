@@ -195,7 +195,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }
 
-    return friendlyAppErrorMessage(error);
+    return friendlyAppErrorMessage(error, action: 'sign in with Google');
   }
 }
 

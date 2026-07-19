@@ -12,29 +12,38 @@ import '../player_progress.dart';
 import '../user_profile.dart';
 import '../wallet_conversation.dart';
 
-String friendlyAppErrorMessage(Object error) {
+String friendlyAppErrorMessage(
+  Object error, {
+  String action = 'complete this request',
+}) {
   final rawMessage = error.toString();
   final message = rawMessage.replaceFirst('Exception: ', '').trim();
-  const recoveryHint =
-      ' Please try logout and login again if it keeps happening. Thank you!';
+  final normalizedAction = action.trim().isEmpty
+      ? 'complete this request'
+      : action.trim();
 
   if (_isSessionError(error, message)) {
-    return 'Session expired. Please logout and login again. Thank you!';
+    return 'Your session expired while trying to $normalizedAction. '
+        'Please sign in again.';
   }
 
   if (_isTimeoutError(error, message)) {
-    return 'Something took too long. Please try again.$recoveryHint';
+    return 'We could not $normalizedAction because the server took too long. '
+        'Please try again.';
   }
 
   if (_isConnectionError(message)) {
-    return 'We could not complete your request. Please try again.$recoveryHint';
+    return 'We could not $normalizedAction. Check your internet connection '
+        'and try again.';
   }
 
-  if (message.isEmpty) {
-    return 'Something went wrong. Please try again.$recoveryHint';
+  if (error is ApiException &&
+      message.isNotEmpty &&
+      !_isGenericServerMessage(message)) {
+    return message;
   }
 
-  return 'Something went wrong. Please try again.$recoveryHint';
+  return 'We could not $normalizedAction. Please try again.';
 }
 
 class ApiClient {
@@ -747,4 +756,12 @@ bool _isConnectionError(String message) {
       lower.contains('connection timed out') ||
       lower.contains('failed host lookup') ||
       lower.contains('network is unreachable');
+}
+
+bool _isGenericServerMessage(String message) {
+  final lower = message.toLowerCase();
+  return lower.contains('something went wrong') ||
+      lower == 'server error' ||
+      lower == 'internal server error' ||
+      lower == 'the server could not complete the request';
 }

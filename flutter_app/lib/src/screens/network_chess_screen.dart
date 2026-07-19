@@ -218,7 +218,11 @@ class _NetworkChessScreenState extends State<NetworkChessScreen> {
       }
       await _settleIfFinished();
     } catch (error) {
-      if (mounted) setState(() => _error = friendlyAppErrorMessage(error));
+      if (mounted) {
+        setState(() {
+          _error = friendlyAppErrorMessage(error, action: 'refresh this match');
+        });
+      }
     }
   }
 
@@ -277,7 +281,11 @@ class _NetworkChessScreenState extends State<NetworkChessScreen> {
       });
       await _settleIfFinished();
     } catch (error) {
-      if (mounted) setState(() => _error = friendlyAppErrorMessage(error));
+      if (mounted) {
+        setState(() {
+          _error = friendlyAppErrorMessage(error, action: 'submit your move');
+        });
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -332,7 +340,12 @@ class _NetworkChessScreenState extends State<NetworkChessScreen> {
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       if (mounted) {
-        setState(() => _error = friendlyAppErrorMessage(error));
+        setState(() {
+          _error = friendlyAppErrorMessage(
+            error,
+            action: 'confirm the match result',
+          );
+        });
       }
       await _refresh();
       if (_match.status == 'completed' && mounted) {

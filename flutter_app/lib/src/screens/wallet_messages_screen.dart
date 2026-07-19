@@ -482,7 +482,12 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = friendlyAppErrorMessage(error));
+        setState(() {
+          _error = friendlyAppErrorMessage(
+            error,
+            action: 'load your wallet conversations',
+          );
+        });
       }
     }
   }
@@ -505,7 +510,12 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
       });
     } catch (error) {
       if (mounted) {
-        setState(() => _error = friendlyAppErrorMessage(error));
+        setState(() {
+          _error = friendlyAppErrorMessage(
+            error,
+            action: 'open this wallet conversation',
+          );
+        });
       }
     }
   }
@@ -557,7 +567,14 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
       await _loadConversations();
     } catch (error) {
       if (mounted) {
-        setState(() => _error = friendlyAppErrorMessage(error));
+        setState(() {
+          _error = friendlyAppErrorMessage(
+            error,
+            action: isWithdrawal
+                ? 'send your withdrawal request'
+                : 'send your load-balance request',
+          );
+        });
       }
     } finally {
       if (mounted) {
@@ -598,7 +615,12 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
       await _loadConversations();
     } catch (error) {
       if (mounted) {
-        setState(() => _error = friendlyAppErrorMessage(error));
+        setState(() {
+          _error = friendlyAppErrorMessage(
+            error,
+            action: 'send your wallet message',
+          );
+        });
       }
     } finally {
       if (mounted) {
@@ -645,7 +667,12 @@ class _WalletMessagesScreenState extends State<WalletMessagesScreen> {
       ).showSnackBar(const SnackBar(content: Text('Chat deleted')));
     } catch (error) {
       if (mounted) {
-        setState(() => _error = friendlyAppErrorMessage(error));
+        setState(() {
+          _error = friendlyAppErrorMessage(
+            error,
+            action: 'delete this wallet conversation',
+          );
+        });
       }
     }
   }
