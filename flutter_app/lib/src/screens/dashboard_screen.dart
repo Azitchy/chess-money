@@ -147,22 +147,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 MaterialPageRoute<void>(
                   builder: (_) => ProfileScreen(
                     apiClient: widget.apiClient,
+                    onLogout: widget.onLogout,
                     demoMode: widget.demoMode,
                   ),
                 ),
               );
             },
             icon: const Icon(Icons.account_circle_outlined),
-            color: AppColors.deepPurple,
-          ),
-          IconButton(
-            onPressed: () async {
-              if (!widget.demoMode) {
-                unawaited(widget.apiClient.logout());
-              }
-              widget.onLogout();
-            },
-            icon: const Icon(Icons.logout_rounded),
             color: AppColors.deepPurple,
           ),
           const SizedBox(width: 8),

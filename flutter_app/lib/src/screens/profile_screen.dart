@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -11,10 +12,12 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     required this.apiClient,
+    required this.onLogout,
     this.demoMode = false,
   });
 
   final ApiClient apiClient;
+  final VoidCallback onLogout;
   final bool demoMode;
 
   @override
@@ -175,6 +178,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                   style: FilledButton.styleFrom(
                                     backgroundColor: AppColors.deepPurple,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(26),
+                            border: Border.all(color: const Color(0xFFFFD7D7)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Account access',
+                                style: TextStyle(
+                                  color: AppColors.heading,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Sign out securely from this device.',
+                                style: TextStyle(color: AppColors.mutedText),
+                              ),
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 50,
+                                child: OutlinedButton.icon(
+                                  key: const Key('profile-logout-button'),
+                                  onPressed: _confirmLogout,
+                                  icon: const Icon(Icons.logout_rounded),
+                                  label: const Text(
+                                    'Sign out',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFFB42318),
+                                    side: const BorderSide(
+                                      color: Color(0xFFFFB4B4),
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(18),
                                     ),
@@ -364,6 +420,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() => _saving = false);
       }
     }
+  }
+
+  Future<void> _confirmLogout() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sign out?'),
+        content: const Text(
+          'You will need to use Google to sign in again on this device.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB42318),
+            ),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout != true || !mounted) return;
+
+    if (!widget.demoMode) {
+      unawaited(widget.apiClient.logout());
+    }
+    Navigator.of(context).pop();
+    widget.onLogout();
   }
 
   void _applyProfile(UserProfile profile) {
