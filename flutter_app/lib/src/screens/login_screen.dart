@@ -139,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final googleSignIn = GoogleSignIn(
-        scopes: const ['email', 'profile'],
+        scopes: const ['openid', 'email', 'profile'],
         clientId: isApplePlatform && iosClientId.isNotEmpty
             ? iosClientId
             : null,
