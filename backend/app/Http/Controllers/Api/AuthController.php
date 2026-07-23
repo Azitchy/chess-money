@@ -106,7 +106,7 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid Google login'], 422);
         }
 
-        if (! $this->googleEmailIsVerified($payload)) {
+        if (! in_array($payload['email_verified'] ?? false, [true, 'true', 1, '1'], true)) {
             return response()->json(['message' => 'Google account email is not verified'], 422);
         }
 
@@ -237,25 +237,4 @@ class AuthController extends Controller
         return [$user->fresh(), $plainToken];
     }
 
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function googleEmailIsVerified(array $payload): bool
-    {
-        $verified = $payload['email_verified'] ?? $payload['verified_email'] ?? false;
-
-        if (is_bool($verified)) {
-            return $verified;
-        }
-
-        if (is_int($verified)) {
-            return $verified === 1;
-        }
-
-        if (is_string($verified)) {
-            return in_array(Str::lower(trim($verified)), ['true', '1'], true);
-        }
-
-        return false;
-    }
 }

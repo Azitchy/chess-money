@@ -129,30 +129,6 @@ class AuthFlowTest extends TestCase
         ]);
     }
 
-    public function test_google_login_accepts_verified_email_from_userinfo(): void
-    {
-        Http::fake([
-            'https://openidconnect.googleapis.com/v1/userinfo' => Http::response([
-                'verified_email' => true,
-                'email' => 'legacy.mobile@example.com',
-                'name' => 'Legacy Mobile User',
-                'sub' => 'legacy-mobile-google-sub-123',
-            ], 200),
-        ]);
-
-        $response = $this->postJson('/api/google-login', [
-            'access_token' => 'fake-mobile-access-token',
-        ]);
-
-        $response->assertOk()
-            ->assertJsonPath('user.email', 'legacy.mobile@example.com');
-
-        $this->assertDatabaseHas('users', [
-            'email' => 'legacy.mobile@example.com',
-            'google_id' => 'legacy-mobile-google-sub-123',
-        ]);
-    }
-
     public function test_google_login_reuses_existing_gmail_without_creating_duplicate(): void
     {
         $existingUser = User::factory()->create([

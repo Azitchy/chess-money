@@ -139,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final googleSignIn = GoogleSignIn(
-        scopes: const ['openid', 'email', 'profile'],
+        scopes: const ['email', 'profile'],
         clientId: isApplePlatform && iosClientId.isNotEmpty
             ? iosClientId
             : null,
@@ -182,10 +182,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     if (error is PlatformException) {
-      final details = '${error.message ?? ''} ${error.details ?? ''}';
-      if (details.contains('ApiException: 10')) {
+      final details =
+          '${error.code} ${error.message ?? ''} ${error.details ?? ''}';
+      if (details.contains('ApiException: 10') ||
+          details.contains('statusCode=10')) {
         return 'Google OAuth does not match this app package and SHA-1. '
             'Please update the Android OAuth client and try again.';
+      }
+      if (error.code == GoogleSignIn.kSignInFailedError) {
+        return 'Google sign-in failed. Please check the Android OAuth package name and SHA-1.';
       }
       if (error.code == 'network_error') {
         return 'Google could not connect. Please check your internet and try again.';
@@ -193,6 +198,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (error.code == 'sign_in_canceled') {
         return 'Google sign-in was cancelled.';
       }
+    }
+
+    if (error.toString().contains('Google did not return a usable token')) {
+      return 'Google sign-in is missing a usable token. Please configure the Web OAuth client ID.';
     }
 
     return friendlyAppErrorMessage(error, action: 'sign in with Google');
