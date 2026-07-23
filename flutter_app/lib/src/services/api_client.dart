@@ -215,7 +215,7 @@ class ApiClient {
       );
     } catch (error) {
       if (error is ApiException) {
-        throw error;
+        rethrow;
       }
       throw Exception(_friendlyNetworkMessage(error));
     }

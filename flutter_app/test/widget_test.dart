@@ -575,7 +575,13 @@ void main() {
     final apiClient = await ApiClient.create();
 
     await tester.pumpWidget(
-      MaterialApp(home: ProfileScreen(apiClient: apiClient, demoMode: true)),
+      MaterialApp(
+        home: ProfileScreen(
+          apiClient: apiClient,
+          demoMode: true,
+          onLogout: () {},
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
